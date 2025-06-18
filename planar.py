@@ -105,10 +105,10 @@ class PlanarEnv:
     def step(self, action, opponent_motion=None):
 
         self.state = self.transition(self.state, action, opponent_motion)
-        observation = None
-        reward = None
-        terminated = None
-        truncated = None
+        observation = self.get_observation(self.state)
+        reward = self.reward_function(self.state)
+        terminated = False
+        truncated = False
         info = None
         return observation, reward, terminated, truncated, info
 
