@@ -13,7 +13,8 @@ class PlanarActionSpace:
         return self.step_size * self.rng.uniform(-1, +1, size=(self.num_allies, 3))
 
 class PlanarState:
-    def __init__(self, allies, adversaries):
+    def __init__(self, env, allies, adversaries):
+        self.env = env
         self.allies = allies
         self.adversaries = adversaries
 
@@ -22,6 +23,12 @@ class PlanarState:
         render current state on matplotlib Axes ax
         """
         ax.clear()
+
+        # view cone vertices
+        view = np.array([
+            [0, 2, 2],
+            [0, 2*np.tan(+self.env.view_angle), 2*np.tan(-self.env.view_angle)],
+        ])
 
         for agents, color in ((self.allies, 'g'), (self.adversaries, 'r')):
 
@@ -33,12 +40,22 @@ class PlanarState:
             ax.scatter(*agents.T[:2], marker='o', color=color)
             for i, (x, y) in enumerate(agents[:,:2]): ax.text(x, y, str(i))
 
+            # visual fields
+            for (x,y,a) in agents:
+                rotmat = np.array([[np.cos(a), -np.sin(a)], [np.sin(a), np.cos(a)]])
+                rotview = rotmat @ view + np.array([[x, y]]).T
+                ax.add_patch(mp.Polygon(rotview.T, fill=True, alpha=0.2, facecolor=color, edgecolor='none'))
+
         ax.set_xlim([0, 1])
         ax.set_ylim([0, 1])
         ax.set_aspect('equal', 'box')
+        # input('.')
 
 class PlanarEnv:
-    def __init__(self, num_allies, num_adversaries, step_size=0.05, view_angle=np.pi/2):
+    def __init__(self, num_allies, num_adversaries, step_size=0.05, view_angle=np.pi/4):
+        """
+        view_angle is *half* the angular width of visual field, should be strictly less than 90
+        """
         self.num_allies = num_allies
         self.num_adversaries = num_adversaries
         self.step_size = step_size
@@ -61,7 +78,7 @@ class PlanarEnv:
         allies[:,:2] = np.minimum(1, np.maximum(0, allies[:,:2]))
         adversaries[:,:2] = np.minimum(1, np.maximum(0, adversaries[:,:2]))
 
-        return PlanarState(allies, adversaries)
+        return PlanarState(self, allies, adversaries)
 
     def reward_function(self, state):
         # adversaries are visible
@@ -83,7 +100,7 @@ class PlanarEnv:
         allies[:,2] *= _TPI
         adversaries = self.rng.uniform(size=(self.num_adversaries, 3))
         adversaries[:,2] *= _TPI
-        return PlanarState(allies, adversaries)
+        return PlanarState(self, allies, adversaries)
 
     def get_observation(self, state):
         return np.concatenate((state.allies, state.adversaries), axis=None)
@@ -132,7 +149,8 @@ if __name__ == "__main__":
 
     import matplotlib.pyplot as pt
 
-    env = PlanarEnv(3, 4, .01)
+    num_allies, num_adversaries = 3, 4
+    env = PlanarEnv(num_allies, num_adversaries, .01, view_angle=np.pi/8)
     env.reset()
 
     pt.ion()
@@ -140,7 +158,7 @@ if __name__ == "__main__":
     for t in range(1000):
         env.render(pt.gca(), hang=False, msg = f"t={t}, r={env.reward_function(env.state)}")
         action = env.action_space.sample()
-        action = np.full((3,3), .05)
+        action = np.full((num_allies,3), .05)
         env.step(action)
         print(env.state.allies)
         pt.pause(0.01)
