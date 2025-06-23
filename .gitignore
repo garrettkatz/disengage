@@ -1,4 +1,6 @@
 *~
 *.pkl
 __pycache__
+*.mp4
+*.lprof
 

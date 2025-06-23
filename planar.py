@@ -9,8 +9,10 @@ class PlanarActionSpace:
         self.num_allies = num_allies
         self.step_size = step_size
         self.rng = rng
-    def sample(self):
-        return self.step_size * self.rng.uniform(-1, +1, size=(self.num_allies, 3))
+    def sample(self, batch_size=None):
+        shape = (self.num_allies, 3)
+        if batch_size is not None: shape = (batch_size,) + shape
+        return self.step_size * self.rng.uniform(-1, +1, size=shape)
 
 class PlanarState:
     def __init__(self, env, allies, adversaries):
@@ -21,6 +23,7 @@ class PlanarState:
     def render(self, ax):
         """
         render current state on matplotlib Axes ax
+        assumes state is not batched
         """
         ax.clear()
 
@@ -49,6 +52,8 @@ class PlanarState:
         ax.set_xlim([0, 1])
         ax.set_ylim([0, 1])
         ax.set_aspect('equal', 'box')
+        ax.set_xticks([])  # Removes x-axis ticks and labels
+        ax.set_yticks([])  # Removes y-axis ticks and labels
         # input('.')
 
 class PlanarEnv:
@@ -64,6 +69,7 @@ class PlanarEnv:
         self.action_space = PlanarActionSpace(num_allies, self.step_size, self.rng)
         self.state = None
 
+    @profile
     def transition(self, state, agent_motion, opponent_motion=None):
         # assumes |agent_motion| <= self.step_size
         # should support batching in the state
@@ -75,43 +81,75 @@ class PlanarEnv:
         allies = state.allies + agent_motion
         adversaries = state.adversaries + opponent_motion
 
-        allies[:,:2] = np.minimum(1, np.maximum(0, allies[:,:2]))
-        adversaries[:,:2] = np.minimum(1, np.maximum(0, adversaries[:,:2]))
+        allies[...,:2] = np.minimum(1, np.maximum(0, allies[...,:2]))
+        adversaries[...,:2] = np.minimum(1, np.maximum(0, adversaries[...,:2]))
 
         return PlanarState(self, allies, adversaries)
 
+
+    @profile
+    def _team_reward(self, team, opponents):
+
+        # batched
+        diffs = opponents[...,:,None,:2] - team[...,None,:,:2]
+        angles = np.arctan2(diffs[...,1], diffs[...,0]) % _TPI
+        headings = team[...,None,:,2] % _TPI
+        deltas = np.minimum((angles - headings) % _TPI, (headings - angles) % _TPI)
+        viz = deltas < self.view_angle
+        return viz.sum(axis=(-2,-1))
+
+        # # unbatched
+        # diffs = opponents[:,None,:2] - team[None,:,:2]
+        # angles = np.arctan2(diffs[:,:,1], diffs[:,:,0]) % _TPI
+        # headings = team[:,2] % _TPI
+        # deltas = np.minimum((angles - headings) % _TPI, (headings - angles) % _TPI)
+        # viz = deltas < self.view_angle
+        # return viz.sum()
+
+    @profile
     def reward_function(self, state):
-        # adversaries are visible
-
-        def team_reward(team, opponents):
-            diffs = opponents[:,None,:2] - team[None,:,:2]
-            angles = np.arctan2(diffs[:,:,1], diffs[:,:,0]) % _TPI
-            headings = team[:,2] % _TPI
-            deltas = np.minimum((angles - headings) % _TPI, (headings - angles) % _TPI)
-            viz = deltas < self.view_angle
-            return viz.sum()
-
-        allies_reward = team_reward(state.allies, state.adversaries)
-        adversaries_reward = team_reward(state.adversaries, state.allies)
+        allies_reward = self._team_reward(state.allies, state.adversaries)
+        adversaries_reward = self._team_reward(state.adversaries, state.allies)
         return allies_reward - adversaries_reward
 
-    def random_state(self):
-        allies = self.rng.uniform(size=(self.num_allies, 3))
-        allies[:,2] *= _TPI
-        adversaries = self.rng.uniform(size=(self.num_adversaries, 3))
-        adversaries[:,2] *= _TPI
+    def random_state(self, batch_size=None):
+
+        if batch_size is None:
+            allies = self.rng.uniform(size=(self.num_allies, 3))
+            adversaries = self.rng.uniform(size=(self.num_adversaries, 3))
+        else:
+            allies = self.rng.uniform(size=(batch_size, self.num_allies, 3))
+            adversaries = self.rng.uniform(size=(batch_size, self.num_adversaries, 3))
+
+        allies[...,2] *= _TPI
+        adversaries[...,2] *= _TPI
         return PlanarState(self, allies, adversaries)
 
-    def get_observation(self, state):
-        return np.concatenate((state.allies, state.adversaries), axis=None)
+        # # unbatched
+        # allies = self.rng.uniform(size=(self.num_allies, 3))
+        # allies[:,2] *= _TPI
+        # adversaries = self.rng.uniform(size=(self.num_adversaries, 3))
+        # adversaries[:,2] *= _TPI
+        # return PlanarState(self, allies, adversaries)
 
-    def reset(self, seed=None):
+    def get_observation(self, state):
+        # batched
+        if len(state.allies.shape) > 2:
+            obs = np.concatenate([state.allies, state.adversaries], axis=1)
+            return obs.reshape(obs.shape[0], -1) # flatten all but batch dim
+        else:
+            return np.concatenate((state.allies, state.adversaries), axis=None)
+
+        # # unbatched
+        # return np.concatenate((state.allies, state.adversaries), axis=None)
+
+    def reset(self, seed=None, batch_size=None):
 
         if seed is not None:
             self.rng = np.random.default_rng(seed)
 
         # initialize state
-        self.state = self.random_state()
+        self.state = self.random_state(batch_size)
 
         # return observation and info
         observation = self.get_observation(self.state)
@@ -120,6 +158,11 @@ class PlanarEnv:
 
     @profile
     def step(self, action, opponent_motion=None):
+
+        # make sure action in action space
+        # print(np.fabs(action))
+        # print(self.step_size)
+        assert (np.fabs(action) <= self.step_size).all()
 
         self.state = self.transition(self.state, action, opponent_motion)
         observation = self.get_observation(self.state)
@@ -145,22 +188,47 @@ class PlanarEnv:
         elif msg is not None: print(msg)
 
 
+@profile
+def batch_test():
+    num_allies, num_adversaries = 5, 4
+    env = PlanarEnv(num_allies, num_adversaries, .01, view_angle=np.pi/8)
+
+    # test batching
+    batch_size = 10
+    timesteps = 10
+
+    env.reset(batch_size=batch_size)
+    for t in range(timesteps):
+        action = env.action_space.sample(batch_size)
+        observation, reward, _, _, _ = env.step(action)
+
+    for b in range(batch_size):
+        env.reset()
+        for t in range(timesteps):
+            action = env.action_space.sample()
+            observation, reward, _, _, _ = env.step(action)
+
 if __name__ == "__main__":
 
     import matplotlib.pyplot as pt
 
-    num_allies, num_adversaries = 3, 4
-    env = PlanarEnv(num_allies, num_adversaries, .01, view_angle=np.pi/8)
-    env.reset()
+    # test batching
+    for _ in range(100):
+        batch_test()
 
-    pt.ion()
-    pt.show()
-    for t in range(1000):
-        env.render(pt.gca(), hang=False, msg = f"t={t}, r={env.reward_function(env.state)}")
-        action = env.action_space.sample()
-        action = np.full((num_allies,3), .05)
-        env.step(action)
-        print(env.state.allies)
-        pt.pause(0.01)
-    input('.')
+    # num_allies, num_adversaries = 3, 4
+    # env = PlanarEnv(num_allies, num_adversaries, step_size=.01, view_angle=np.pi/8)
+
+    # # unbatched rendering
+    # env.reset()
+    # pt.ion()
+    # pt.show()
+    # for t in range(1000):
+    #     env.render(pt.gca(), hang=False, msg = f"t={t}, r={env.reward_function(env.state)}")
+    #     action = env.action_space.sample()
+    #     action = np.full((num_allies,3), .01)
+    #     env.step(action)
+    #     print(env.state.allies)
+    #     pt.pause(0.01)
+    # input('.')
 

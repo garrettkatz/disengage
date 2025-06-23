@@ -65,6 +65,7 @@ def train(env, actor, config):
 
 if __name__ == "__main__":
 
+    step_size = 0.05
     do_train = True
 
     class Actor(tr.nn.Module):
@@ -113,20 +114,23 @@ if __name__ == "__main__":
             for k, idx in enumerate(allies_idx):
                 action[idx] = sorted_action[k]
 
+            # scale action to environment's action space
+            action = step_size * (2 * action - 1)            
+
             return action, log_prob
 
     config = TrainConfig(
-        lr=0.001,
-        updates=1000,
-        episodes=30,
-        timesteps=50,
+        lr=0.0001,
+        updates=100,
+        episodes=100,
+        timesteps=100,
     )
 
     from planar import PlanarEnv
     env = PlanarEnv(
         num_allies=1,
         num_adversaries=1,
-        step_size=0.05,
+        step_size=step_size,
         view_angle=np.pi/8,
     )
 
