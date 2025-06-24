@@ -66,8 +66,11 @@ def train(env, actor, config):
 if __name__ == "__main__":
 
     # step_size = 0.05
+    num_allies = 3
+    num_adversaries = 3
+    view_angle = np.pi/20
     step_size = np.array([0.05, 0.05, .1]) # larger rotational motion
-    do_train = False
+    do_train = True
     resume = False
 
     def trig_encode(agents):
@@ -118,15 +121,68 @@ if __name__ == "__main__":
             features = (sorted_obs[:,None] * sorted_obs).flatten()
 
             # constrain output to valid action space
-            out = step_size * np.tanh(self.params @ features)
+            out = np.tanh(self.params @ features)
 
             # reshape and unsort action
-            sorted_action = out.reshape(env.num_allies, 3)
+            sorted_action = step_size * out.reshape(env.num_allies, 3)
             action = np.empty(sorted_action.shape)
             for k, idx in enumerate(allies_idx):
                 action[idx] = sorted_action[k]
 
             return action
+
+    class WeightSharedActor:
+
+        def __init__(self, env):
+            self.env = env
+            self.obs_dim = 4*(env.num_allies + env.num_adversaries) + 1 # 4* for trig encoding, +1 for bias
+            self.act_dim = 3 # 3 dims per agent, all use same params
+            # # linear model
+            # self.params = np.zeros((self.act_dim, self.obs_dim))
+            # quadratic model
+            self.params = np.zeros((self.act_dim, self.obs_dim**2))
+
+        def set_parameters(self, params):
+            assert self.params.shape == params.shape
+            self.params = params
+
+        @profile
+        def __call__(self, observation):
+
+            # get allies and adversaries coordinates
+            split = 3*self.env.num_allies
+            allies, adversaries = observation[:split], observation[split:]
+            allies = allies.reshape(-1, 3)
+            adversaries = adversaries.reshape(-1, 3)
+
+            # encode angles
+            allies = trig_encode(allies)
+            adversaries = trig_encode(adversaries)
+
+            # do allies one at a time
+            action = []
+            for a in range(len(allies)):
+
+                # sort other agents for permutation invariance
+                other_allies = allies[np.arange(len(allies)) != a]
+                allies_idx = np.lexsort(other_allies.T)
+                adversaries_idx = np.lexsort(adversaries.T)
+                sorted_obs = np.concatenate([
+                    allies[a],
+                    other_allies[allies_idx].flatten(),
+                    adversaries[adversaries_idx].flatten(),
+                    np.ones(1)]) # for bias
+    
+                # # linear model
+                # features = sorted_obs.flatten()
+                # quadratic model
+                features = (sorted_obs[:,None] * sorted_obs).flatten()
+    
+                # constrain output to valid action space
+                out = step_size * np.tanh(self.params @ features)
+                action.append(out)
+
+            return np.stack(action)
 
     config = TrainConfig(
         stdev=0.1,
@@ -137,13 +193,14 @@ if __name__ == "__main__":
 
     from planar import PlanarEnv
     env = PlanarEnv(
-        num_allies=1,
-        num_adversaries=1,
+        num_allies=num_allies,
+        num_adversaries=num_adversaries,
         step_size=step_size,
-        view_angle=np.pi/8,
+        view_angle=view_angle,
     )
 
-    actor = Actor(env)
+    # actor = Actor(env)
+    actor = WeightSharedActor(env)
 
     import pickle as pk
 

@@ -96,6 +96,11 @@ class PlanarEnv:
         headings = team[...,None,:,2] % _TPI
         deltas = np.minimum((angles - headings) % _TPI, (headings - angles) % _TPI)
         viz = deltas < self.view_angle
+
+        # number of opponent viewed by at least one team member
+        return viz.any(axis=-1).sum(axis=-1)
+
+        # total views
         return viz.sum(axis=(-2,-1))
 
         # # unbatched
