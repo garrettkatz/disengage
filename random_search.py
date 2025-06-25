@@ -6,6 +6,7 @@ TrainConfig = namedtuple("TrainConfig", [
     "stdev", "samples", "episodes", "timesteps",
 ])
 
+@profile
 def run_episodes(env, actor, config):
 
     # collect batched episodes
@@ -13,8 +14,10 @@ def run_episodes(env, actor, config):
     observation, _ = env.reset(batch_size=config.episodes)
     for t in range(config.timesteps):
 
-        # need to batch actor
-        action = np.stack([actor(obs) for obs in observation])
+        # # need to batch actor
+        # action = np.stack([actor(obs) for obs in observation])
+        # batched actor
+        action = actor(observation)
 
         observation, reward, _, _, _ = env.step(action)
         rewards[t] = reward
@@ -26,9 +29,10 @@ def run_episodes(env, actor, config):
     std_net_reward = np.std(net_rewards)
     # perf = avg_net_reward - std_net_reward # maximize typical "worst" case
     perf = avg_net_reward
-    margin = std_net_reward / config.episodes
+    margin = std_net_reward / config.episodes**.5
     return perf, margin
 
+@profile
 def train(env, actor, config):
     """
     modifies actor params in-place
@@ -49,7 +53,10 @@ def train(env, actor, config):
         # collect episode rewards
         perf, margin = run_episodes(env, actor, config)
 
-        if perf - margin > best_perf + best_margin:
+        # # conservative, require high likelihood of improvement
+        # if perf - margin > best_perf + best_margin:
+        # liberal, change at small chance of improvement
+        if perf > best_perf:
             best_perf, best_margin, best_params = perf, margin, params
 
         # update curves
@@ -66,13 +73,14 @@ def train(env, actor, config):
 if __name__ == "__main__":
 
     # step_size = 0.05
-    num_allies = 3
-    num_adversaries = 3
-    view_angle = np.pi/20
+    num_allies = 2
+    num_adversaries = 2
+    view_angle = np.pi/16
     step_size = np.array([0.05, 0.05, .1]) # larger rotational motion
     do_train = True
     resume = False
 
+    @profile
     def trig_encode(agents):
         # helper for better heading features
         # period invariant; 0 similar to 2pi
@@ -95,7 +103,6 @@ if __name__ == "__main__":
             assert self.params.shape == params.shape
             self.params = params
 
-        @profile
         def __call__(self, observation):
             # get allies and adversaries coordinates
             split = 3*self.env.num_allies
@@ -117,8 +124,10 @@ if __name__ == "__main__":
 
             # # linear model
             # features = sorted_obs.flatten()
-            # quadratic model
-            features = (sorted_obs[:,None] * sorted_obs).flatten()
+            # # quadratic model
+            # features = (sorted_obs[:,None] * sorted_obs).flatten()
+            # cubic model
+            features = (sorted_obs[:,None,None] * sorted_obs[None,:,None] * sorted_obs).flatten()
 
             # constrain output to valid action space
             out = np.tanh(self.params @ features)
@@ -141,19 +150,62 @@ if __name__ == "__main__":
             # self.params = np.zeros((self.act_dim, self.obs_dim))
             # quadratic model
             self.params = np.zeros((self.act_dim, self.obs_dim**2))
+            # # cubic model
+            # self.params = np.zeros((self.act_dim, self.obs_dim**3))
 
         def set_parameters(self, params):
             assert self.params.shape == params.shape
             self.params = params
 
+        # @profile
+        # def __call__(self, observation):
+
+        #     # get allies and adversaries coordinates
+        #     split = 3*self.env.num_allies
+        #     allies, adversaries = observation[:split], observation[split:]
+        #     allies = allies.reshape(-1, 3)
+        #     adversaries = adversaries.reshape(-1, 3)
+
+        #     # encode angles
+        #     allies = trig_encode(allies)
+        #     adversaries = trig_encode(adversaries)
+
+        #     # do allies one at a time
+        #     action = []
+        #     for a in range(len(allies)):
+
+        #         # sort other agents for permutation invariance
+        #         other_allies = allies[np.arange(len(allies)) != a]
+        #         allies_idx = np.lexsort(other_allies.T)
+        #         adversaries_idx = np.lexsort(adversaries.T)
+        #         sorted_obs = np.concatenate([
+        #             allies[a],
+        #             other_allies[allies_idx].flatten(),
+        #             adversaries[adversaries_idx].flatten(),
+        #             np.ones(1)]) # for bias
+    
+        #         # # linear model
+        #         # features = sorted_obs.flatten()
+        #         # quadratic model
+        #         features = (sorted_obs[:,None] * sorted_obs).flatten()
+        #         # # cubic model
+        #         # features = (sorted_obs[:,None,None] * sorted_obs[None,:,None] * sorted_obs).flatten()
+    
+        #         # constrain output to valid action space
+        #         out = step_size * np.tanh(self.params @ features)
+        #         action.append(out)
+
+        #     return np.stack(action)
+
+        # batched version
         @profile
         def __call__(self, observation):
 
             # get allies and adversaries coordinates
             split = 3*self.env.num_allies
-            allies, adversaries = observation[:split], observation[split:]
-            allies = allies.reshape(-1, 3)
-            adversaries = adversaries.reshape(-1, 3)
+            allies, adversaries = observation[...,:split], observation[...,split:]
+            allies = allies.reshape(-1, self.env.num_allies, 3)
+            adversaries = adversaries.reshape(-1, self.env.num_adversaries, 3)
 
             # encode angles
             allies = trig_encode(allies)
@@ -161,33 +213,45 @@ if __name__ == "__main__":
 
             # do allies one at a time
             action = []
-            for a in range(len(allies)):
+            for a in range(self.env.num_allies):
 
                 # sort other agents for permutation invariance
-                other_allies = allies[np.arange(len(allies)) != a]
-                allies_idx = np.lexsort(other_allies.T)
-                adversaries_idx = np.lexsort(adversaries.T)
+                other_allies = allies[:, np.arange(self.env.num_allies) != a, :]
+                allies_idx = np.lexsort(np.transpose(other_allies, (2, 0, 1)), axis=1)
+                adversaries_idx = np.lexsort(np.transpose(adversaries, (2, 0, 1)), axis=1)
                 sorted_obs = np.concatenate([
-                    allies[a],
-                    other_allies[allies_idx].flatten(),
-                    adversaries[adversaries_idx].flatten(),
-                    np.ones(1)]) # for bias
+                    allies[:,a],
+                    np.take_along_axis(other_allies, allies_idx[:,:,None], axis=1).reshape(-1, (self.env.num_allies-1)*4),
+                    np.take_along_axis(adversaries, adversaries_idx[:,:,None], axis=1).reshape(-1, self.env.num_adversaries*4),
+                    np.ones((len(allies), 1)) # for bias
+                    ], axis=1)
+
+                # # don't bother sorting right now
+                # other_allies = allies[:, np.arange(self.env.num_allies) != a, :]
+                # sorted_obs = np.concatenate([
+                #     allies[:,a],
+                #     other_allies.reshape(-1, (self.env.num_allies-1)*4),
+                #     adversaries.reshape(-1, self.env.num_adversaries*4),
+                #     np.ones((len(allies), 1)) # for bias
+                #     ], axis=1)
     
                 # # linear model
                 # features = sorted_obs.flatten()
                 # quadratic model
-                features = (sorted_obs[:,None] * sorted_obs).flatten()
+                features = (sorted_obs[:,:,None] * sorted_obs[:,None,:]).reshape(len(allies),-1)
+                # # cubic model
+                # features = (sorted_obs[:,None,None] * sorted_obs[None,:,None] * sorted_obs).flatten()
     
                 # constrain output to valid action space
-                out = step_size * np.tanh(self.params @ features)
+                out = step_size * np.tanh(self.params[None,:,:] @ features[:,:,None])[:,:,0]
                 action.append(out)
 
-            return np.stack(action)
+            return np.stack(action, axis=1)
 
     config = TrainConfig(
         stdev=0.1,
-        samples=1000,
-        episodes=200,
+        samples=5,
+        episodes=300,
         timesteps=100,
     )
 

@@ -217,23 +217,23 @@ if __name__ == "__main__":
 
     import matplotlib.pyplot as pt
 
-    # test batching
-    for _ in range(100):
-        batch_test()
+    # # test batching
+    # for _ in range(100):
+    #     batch_test()
 
-    # num_allies, num_adversaries = 3, 4
-    # env = PlanarEnv(num_allies, num_adversaries, step_size=.01, view_angle=np.pi/8)
+    num_allies, num_adversaries = 3, 3
+    env = PlanarEnv(num_allies, num_adversaries, step_size=.01, view_angle=np.pi/8)
 
-    # # unbatched rendering
-    # env.reset()
-    # pt.ion()
-    # pt.show()
-    # for t in range(1000):
-    #     env.render(pt.gca(), hang=False, msg = f"t={t}, r={env.reward_function(env.state)}")
-    #     action = env.action_space.sample()
-    #     action = np.full((num_allies,3), .01)
-    #     env.step(action)
-    #     print(env.state.allies)
-    #     pt.pause(0.01)
-    # input('.')
+    # unbatched rendering
+    env.reset()
+    pt.ion()
+    pt.show()
+    for t in range(1000):
+        env.render(pt.gca(), hang=True, msg = f"t={t}, r={env.reward_function(env.state)}")
+        action = env.action_space.sample()
+        # action = np.full((num_allies,3), .01)
+        env.step(action)
+        print(env.state.allies)
+        pt.pause(0.01)
+    input('.')
 
