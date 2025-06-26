@@ -169,9 +169,9 @@ class PlanarEnv:
         # print(self.step_size)
         assert (np.fabs(action) <= self.step_size).all()
 
+        reward = self.reward_function(self.state)
         self.state = self.transition(self.state, action, opponent_motion)
         observation = self.get_observation(self.state)
-        reward = self.reward_function(self.state)
         terminated = False
         truncated = False
         info = None

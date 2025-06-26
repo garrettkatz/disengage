@@ -1,6 +1,7 @@
 from line_profiler import profile # python -m kernprof -lvr random_search.py
 from collections import namedtuple
 import numpy as np
+from scipy.stats import ttest_ind_from_stats
 
 TrainConfig = namedtuple("TrainConfig", [
     "stdev", "samples", "episodes", "timesteps",
@@ -24,13 +25,19 @@ def run_episodes(env, actor, config):
 
     net_rewards = rewards.mean(axis=0)
 
-    # performance metric
-    avg_net_reward = np.mean(net_rewards)
-    std_net_reward = np.std(net_rewards)
-    # perf = avg_net_reward - std_net_reward # maximize typical "worst" case
-    perf = avg_net_reward
-    margin = std_net_reward / config.episodes**.5
-    return perf, margin
+    # sample stats
+    avg = np.mean(net_rewards)
+    se = np.std(net_rewards, ddof=1)
+    nobs = len(net_rewards)
+    return avg, se, nobs
+
+    # # performance metric
+    # avg_net_reward = np.mean(net_rewards)
+    # std_net_reward = np.std(net_rewards)
+    # # perf = avg_net_reward - std_net_reward # maximize typical "worst" case
+    # perf = avg_net_reward
+    # margin = std_net_reward / config.episodes**.5
+    # return perf, margin
 
 @profile
 def train(env, actor, config):
@@ -39,7 +46,8 @@ def train(env, actor, config):
     """
 
     best_params = actor.params
-    best_perf, best_margin = run_episodes(env, actor, config)
+    # best_perf, best_margin = run_episodes(env, actor, config)
+    best_avg, best_se, nobs = run_episodes(env, actor, config)
 
     # save best parameters and rewards
     all_perfs, best_perfs = [], []
@@ -51,20 +59,32 @@ def train(env, actor, config):
         actor.set_parameters(params)
 
         # collect episode rewards
-        perf, margin = run_episodes(env, actor, config)
+        # perf, margin = run_episodes(env, actor, config)
+        avg, se, _ = run_episodes(env, actor, config)
 
+        # ttest
+        ttest_res = ttest_ind_from_stats(
+            mean1=avg, std1=se, nobs1=nobs,
+            mean2=best_avg, std2=best_se, nobs2=nobs,
+            equal_var=False, alternative="greater")
+
+        # print(avg, se, best_avg, best_se, ttest_res.statistic, ttest_res.pvalue)
+
+        # statistically significant boost in mean
+        if ttest_res.statistic > 0 and ttest_res.pvalue < 0.05:
         # # conservative, require high likelihood of improvement
         # if perf - margin > best_perf + best_margin:
-        # liberal, change at small chance of improvement
-        if perf > best_perf:
-            best_perf, best_margin, best_params = perf, margin, params
+        # # liberal, change at small chance of improvement
+        # if perf > best_perf:
+            best_avg, best_se, best_params = avg, se, params
+            # best_perf, best_margin, best_params = perf, margin, params
 
         # update curves
-        all_perfs.append(perf)
-        best_perfs.append(best_perf)
+        all_perfs.append(avg)
+        best_perfs.append(best_avg)
 
         # progress update
-        print(f"sample {sample} of {config.samples}: {perf:.3f} - {margin:.3f} vs [best = {best_perf:.3f} + {best_margin:.3f}] |w| ~ {np.fabs(best_params).mean()}")
+        print(f"sample {sample} of {config.samples}: {avg:.3f} +/- {se:.3f} vs [best = {best_avg:.3f} +/- {best_se:.3f}] ||w|| ~ {np.linalg.norm(best_params):.3f}")
 
     # wrap up
     actor.set_parameters(best_params)
@@ -73,12 +93,12 @@ def train(env, actor, config):
 if __name__ == "__main__":
 
     # step_size = 0.05
-    num_allies = 2
-    num_adversaries = 2
+    num_allies = 1
+    num_adversaries = 1
     view_angle = np.pi/16
     step_size = np.array([0.05, 0.05, .1]) # larger rotational motion
     do_train = True
-    resume = False
+    resume = True
 
     @profile
     def trig_encode(agents):
@@ -146,10 +166,10 @@ if __name__ == "__main__":
             self.env = env
             self.obs_dim = 4*(env.num_allies + env.num_adversaries) + 1 # 4* for trig encoding, +1 for bias
             self.act_dim = 3 # 3 dims per agent, all use same params
-            # # linear model
-            # self.params = np.zeros((self.act_dim, self.obs_dim))
-            # quadratic model
-            self.params = np.zeros((self.act_dim, self.obs_dim**2))
+            # linear model
+            self.params = np.zeros((self.act_dim, self.obs_dim))
+            # # quadratic model
+            # self.params = np.zeros((self.act_dim, self.obs_dim**2))
             # # cubic model
             # self.params = np.zeros((self.act_dim, self.obs_dim**3))
 
@@ -157,49 +177,10 @@ if __name__ == "__main__":
             assert self.params.shape == params.shape
             self.params = params
 
-        # @profile
-        # def __call__(self, observation):
-
-        #     # get allies and adversaries coordinates
-        #     split = 3*self.env.num_allies
-        #     allies, adversaries = observation[:split], observation[split:]
-        #     allies = allies.reshape(-1, 3)
-        #     adversaries = adversaries.reshape(-1, 3)
-
-        #     # encode angles
-        #     allies = trig_encode(allies)
-        #     adversaries = trig_encode(adversaries)
-
-        #     # do allies one at a time
-        #     action = []
-        #     for a in range(len(allies)):
-
-        #         # sort other agents for permutation invariance
-        #         other_allies = allies[np.arange(len(allies)) != a]
-        #         allies_idx = np.lexsort(other_allies.T)
-        #         adversaries_idx = np.lexsort(adversaries.T)
-        #         sorted_obs = np.concatenate([
-        #             allies[a],
-        #             other_allies[allies_idx].flatten(),
-        #             adversaries[adversaries_idx].flatten(),
-        #             np.ones(1)]) # for bias
-    
-        #         # # linear model
-        #         # features = sorted_obs.flatten()
-        #         # quadratic model
-        #         features = (sorted_obs[:,None] * sorted_obs).flatten()
-        #         # # cubic model
-        #         # features = (sorted_obs[:,None,None] * sorted_obs[None,:,None] * sorted_obs).flatten()
-    
-        #         # constrain output to valid action space
-        #         out = step_size * np.tanh(self.params @ features)
-        #         action.append(out)
-
-        #     return np.stack(action)
-
-        # batched version
         @profile
         def __call__(self, observation):
+
+            batched = len(observation.shape) > 1
 
             # get allies and adversaries coordinates
             split = 3*self.env.num_allies
@@ -221,7 +202,7 @@ if __name__ == "__main__":
                 adversaries_idx = np.lexsort(np.transpose(adversaries, (2, 0, 1)), axis=1)
                 sorted_obs = np.concatenate([
                     allies[:,a],
-                    np.take_along_axis(other_allies, allies_idx[:,:,None], axis=1).reshape(-1, (self.env.num_allies-1)*4),
+                    np.take_along_axis(other_allies, allies_idx[:,:,None], axis=1).reshape(len(allies), (self.env.num_allies-1)*4),
                     np.take_along_axis(adversaries, adversaries_idx[:,:,None], axis=1).reshape(-1, self.env.num_adversaries*4),
                     np.ones((len(allies), 1)) # for bias
                     ], axis=1)
@@ -235,10 +216,10 @@ if __name__ == "__main__":
                 #     np.ones((len(allies), 1)) # for bias
                 #     ], axis=1)
     
-                # # linear model
-                # features = sorted_obs.flatten()
-                # quadratic model
-                features = (sorted_obs[:,:,None] * sorted_obs[:,None,:]).reshape(len(allies),-1)
+                # linear model
+                features = sorted_obs.reshape(len(allies), -1)
+                # # quadratic model
+                # features = (sorted_obs[:,:,None] * sorted_obs[:,None,:]).reshape(len(allies),-1)
                 # # cubic model
                 # features = (sorted_obs[:,None,None] * sorted_obs[None,:,None] * sorted_obs).flatten()
     
@@ -246,14 +227,10 @@ if __name__ == "__main__":
                 out = step_size * np.tanh(self.params[None,:,:] @ features[:,:,None])[:,:,0]
                 action.append(out)
 
-            return np.stack(action, axis=1)
+            action = np.stack(action, axis=1)
+            if not batched: action = action[0]
 
-    config = TrainConfig(
-        stdev=0.1,
-        samples=5,
-        episodes=300,
-        timesteps=100,
-    )
+            return action
 
     from planar import PlanarEnv
     env = PlanarEnv(
@@ -265,6 +242,13 @@ if __name__ == "__main__":
 
     # actor = Actor(env)
     actor = WeightSharedActor(env)
+
+    config = TrainConfig(
+        stdev=0.1,
+        samples=5000,
+        episodes=1000,
+        timesteps=100,
+    )
 
     import pickle as pk
 
@@ -293,7 +277,7 @@ if __name__ == "__main__":
 
     pt.ion()
 
-    buck = 20
+    buck = len(all_perfs)//10
     # pt.subplot(1,2,1)
     pt.plot(all_perfs, 'b-')
     pt.plot(np.arange(0, len(all_perfs), buck), np.array(all_perfs).reshape(-1,buck).mean(axis=1), 'ro-')
