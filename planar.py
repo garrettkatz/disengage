@@ -95,21 +95,16 @@ class PlanarEnv:
         angles = np.arctan2(diffs[...,1], diffs[...,0]) % _TPI
         headings = team[...,None,:,2] % _TPI
         deltas = np.minimum((angles - headings) % _TPI, (headings - angles) % _TPI)
-        viz = deltas < self.view_angle
 
-        # number of opponent viewed by at least one team member
-        return viz.any(axis=-1).sum(axis=-1)
-
-        # total views
-        return viz.sum(axis=(-2,-1))
-
-        # # unbatched
-        # diffs = opponents[:,None,:2] - team[None,:,:2]
-        # angles = np.arctan2(diffs[:,:,1], diffs[:,:,0]) % _TPI
-        # headings = team[:,2] % _TPI
-        # deltas = np.minimum((angles - headings) % _TPI, (headings - angles) % _TPI)
+        # ## sparse: number of opponent viewed by at least one team member
         # viz = deltas < self.view_angle
-        # return viz.sum()
+        # return viz.any(axis=-1).sum(axis=-1)
+
+        # ## denser: clipped deltas
+        # return np.maximum(0, 1 - deltas / self.view_angle).sum(axis=(-2,-1))
+
+        ## densest: unclipped, decaying deltas
+        return np.exp(- deltas / self.view_angle).sum(axis=(-2,-1))
 
     @profile
     def reward_function(self, state):

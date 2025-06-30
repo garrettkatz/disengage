@@ -1,7 +1,7 @@
 """
-Fitted value iteration with discrete Q action space
+Fitted value iteration with discrete action space, both Q and V approximation
 """
-from line_profiler import profile # python -m kernprof -lvr fvi.py
+from line_profiler import profile # python -m kernprof -lvr fqvi.py
 import itertools as it
 import numpy as np
 import pickle as pk
@@ -10,12 +10,12 @@ import pickle as pk
 def main():
 
     do_show = True
-    do_train = True
-    resume = False
+    do_train = False
+    resume = True
 
-    num_state_samples = 400
+    num_state_samples = 800
     num_action_samples = 100
-    num_fits = 10
+    num_fits = 5
     gamma = 0.9
 
     # setup environment
@@ -33,10 +33,11 @@ def main():
     )
 
     def get_actions():
+        # return np.array(list(it.product((-1,0,1), repeat=3*num_allies))).reshape(-1, num_allies, 3) * step_size
         moves = [(0,0),(0,1),(0,-1),(1,0),(-1,0)]
-        # ally_actions = list(m + (t,) for (m,t) in it.product(moves, (-1,0,1)))
-        ally_actions = list(m + (t,) for (m,t) in it.product(moves, (-1,1)))
-        actions = np.stack([np.array(a).flatten() for a in it.product(ally_actions, repeat=num_allies)])
+        ally_actions = list(m + (t,) for (m,t) in it.product(moves, (-1,0,1)))
+        # ally_actions = list(m + (t,) for (m,t) in it.product(moves, (-1,1)))
+        actions = np.stack([np.array(a) for a in it.product(ally_actions, repeat=num_allies)]) * step_size
         return actions
 
     # feature extraction
@@ -79,8 +80,7 @@ def main():
         return features, allies_idx
 
     # discretized actions
-    # actions = np.array(list(it.product((-1,0,1), repeat=3*num_allies))).reshape(-1, num_allies, 3) * step_size
-    actions = get_actions().reshape(-1, num_allies, 3) * step_size
+    actions = get_actions()
     data_size = num_state_samples * len(actions) * num_action_samples
     # input(f"{num_state_samples} * {len(actions)} * {num_action_samples} = {data_size}...")
 
@@ -93,15 +93,16 @@ def main():
     # initialize linear critic weights
     if resume:
 
-        with open("fvi.pkl","rb") as f: results = pk.load(f)
-        current_errors, new_errors, critic_changes, critic = results
+        with open("fqvi.pkl","rb") as f: results = pk.load(f)
+        current_errors, new_errors, critic_changes, critic_V, critic_Q = results
 
     else:
 
-        critic = np.zeros((features.shape[1], len(actions)))
         current_errors = []
         new_errors = []
         critic_changes = []
+        critic_V = np.zeros(features.shape[1])
+        critic_Q = np.zeros((features.shape[1], len(actions)))
 
     # input(f"(batch, feature dim) = {features.shape}...")
     print(f"(batch, feature dim) = {features.shape}...")
@@ -119,7 +120,7 @@ def main():
             # action loop
             next_values = np.zeros((len(reward), len(actions)))
             for a, action in enumerate(actions):
-                if a % (len(actions) // 10) == 0: print(f" action {a} of {len(actions)}")
+                # if a % (len(actions) // 10) == 0: print(f" action {a} of {len(actions)}")
 
                 # reorder action based on ally sort order
                 reordered_action = np.empty(allies_idx.shape + (3,))
@@ -134,46 +135,56 @@ def main():
                     next_features, _ = get_features(next_observation)
 
                     # get max next-state Q value
-                    # input(f"{next_features.shape} @ {critic.shape}")
-                    val = (next_features @ critic)
-                    val = val.max(axis=1)
+                    # input(f"{next_features.shape} @ {critic_V.shape}")
+                    val = (next_features @ critic_V)
 
                     # update average
                     next_values[:,a] += val / num_action_samples
 
             # compute error of current critic
-            bellman = reward[:,None] + gamma * next_values
-            # current_error = np.fabs(features @ critic - bellman).mean()
-            current_error = ((features @ critic - bellman)**2).mean()
+            bellman_V = reward + gamma * next_values.max(axis=1)
+            bellman_Q = reward[:,None] + gamma * next_values
+            
+            # current_error = np.fabs(features @ critic_V - bellman_V).mean()
+            current_error = ((features @ critic_V - bellman_V)**2).mean()
             current_errors.append(current_error)
 
-            # fit new critic
-            new_critic = np.linalg.lstsq(features, bellman, rcond=None)[0]
-            # new_error = np.fabs(features @ new_critic - bellman).mean()
-            new_error = ((features @ new_critic - bellman)**2).mean()
+            # fit new critics
+            new_critic_V = np.linalg.lstsq(features, bellman_V, rcond=None)[0]
+            new_critic_Q = np.linalg.lstsq(features, bellman_Q, rcond=None)[0]
+            # new_error = np.fabs(features @ new_critic_V - bellman_V).mean()
+            new_error = ((features @ new_critic_V - bellman_V)**2).mean()
             new_errors.append(new_error)
 
             # critic change
-            critic_change = np.fabs(new_critic - critic).mean()
+            critic_change = np.fabs(new_critic_V - critic_V).mean()
             critic_changes.append(critic_change)
 
             # update critic
-            critic = new_critic
+            critic_V = new_critic_V
+            critic_Q = new_critic_Q
 
             print(f"fit {fit} of {num_fits}, {current_error=:.5f}, {new_error=:.5f}, {critic_change=:.5f}")
 
-        results = (current_errors, new_errors, critic_changes, critic)
-        with open("fvi.pkl","wb") as f: pk.dump(results, f)
+        results = (current_errors, new_errors, critic_changes, critic_V, critic_Q)
+        with open("fqvi.pkl","wb") as f: pk.dump(results, f)
 
     if do_show:
 
+        print(critic_Q)
+        print(np.fabs(critic_Q).max())
+        print(critic_V)
+        print(np.fabs(critic_V).max())
+
         import matplotlib.pyplot as pt
-        pt.subplot(1,3,1)
+        pt.subplot(1,4,1)
         pt.plot(current_errors)
-        pt.subplot(1,3,2)
+        pt.subplot(1,4,2)
         pt.plot(new_errors)
-        pt.subplot(1,3,3)
+        pt.subplot(1,4,3)
         pt.plot(critic_changes)
+        pt.subplot(1,4,4)
+        pt.imshow(critic_Q)
         pt.show()
     
         # animate agent
@@ -183,18 +194,31 @@ def main():
     
         observation, info = env.reset()
         states = [env.state] # precompute intermediate states along plan
-        for t in range(100):
+        for t in range(500):
             env.render(pt.gca(), hang=False, msg = f"t={t}, r={env.reward_function(env.state)}")
     
             features, allies_idx = get_features(observation)
-            action = actions[(features @ critic).argmax()]
+            action = actions[(features @ critic_Q).argmax()]
             reordered_action = np.empty(allies_idx.shape + (3,))
             np.put_along_axis(reordered_action, allies_idx[:,:,None], action[None], axis=1)
     
             observation, reward, _, _, _ = env.step(reordered_action[0])
             states.append(env.state)
             pt.pause(0.01)
+
         input('[Enter] to animate...')
 
+        import matplotlib.animation as animation
+    
+        fig, axs = pt.subplots(1,1)
+        def drawframe(n):
+            states[n].render(axs)
+    
+        print("animating...")
+        anim = animation.FuncAnimation(fig, drawframe, frames=len(states), interval=50, blit=False)
+        print("saving...")
+        anim.save("fqvi.mp4")
+
 if __name__ == "__main__": main()
+
 
