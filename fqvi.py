@@ -6,16 +6,73 @@ import itertools as it
 import numpy as np
 import pickle as pk
 
-@profile
-def main():
+class Policy:
+    def __init__(self, get_features, actions, critic_Q):
+        self.get_features = get_features
+        self.actions = actions
+        self.critic_Q = critic_Q
+
+    def __call__(self, observation):
+        features, allies_idx = self.get_features(observation)
+        action = self.actions[(features @ self.critic_Q).argmax()]
+        reordered_action = np.empty(allies_idx.shape + (3,))
+        np.put_along_axis(reordered_action, allies_idx[:,:,None], action[None], axis=1)
+        return reordered_action[0]
+
+class FeatureExtractor:
+    def __init__(self, env):
+        self.env = env
+
+    def trig_encode(self, agents):
+        # helper for better heading features
+        # period invariant; 0 similar to 2pi
+        xy, angles = agents[...,:2], agents[...,2:]
+        c, s = np.cos(angles), np.sin(angles)
+        return np.concatenate((xy, c, s), axis=-1)
+
+    @profile
+    def __call__(self, observation):
+        env = self.env
+
+        # get allies and adversaries coordinates
+        split = 3*env.num_allies
+        allies, adversaries = observation[...,:split], observation[...,split:]
+        allies = allies.reshape(-1, env.num_allies, 3)
+        adversaries = adversaries.reshape(-1, env.num_adversaries, 3)
+
+        # encode angles
+        allies = self.trig_encode(allies)
+        adversaries = self.trig_encode(adversaries)
+
+        # sort allies and adversaries for permutation in/equivariance
+        allies_idx = np.lexsort(np.transpose(allies, (2, 0, 1)), axis=1)
+        adversaries_idx = np.lexsort(np.transpose(adversaries, (2, 0, 1)), axis=1)
+        features = np.concatenate([
+            np.take_along_axis(allies, allies_idx[:,:,None], axis=1).reshape(len(allies), env.num_allies*4),
+            np.take_along_axis(adversaries, adversaries_idx[:,:,None], axis=1).reshape(len(adversaries), env.num_adversaries*4),
+            np.ones((len(allies), 1)) # for bias
+            ], axis=1)
+
+        # apply kernel
+
+        # quadratic model
+        features = (features[:,:,None] * features[:,None,:]).reshape(len(allies),-1)
+        # # cubic model
+        # features = (features[:,None,None] * features[None,:,None] * sorted_obs).flatten()
+
+        return features, allies_idx
+
+# @profile
+# def main():
+if __name__ == "__main__":
 
     do_show = True
-    do_train = False
+    do_train = True
     resume = True
 
-    num_state_samples = 800
-    num_action_samples = 100
-    num_fits = 5
+    num_state_samples = 1000
+    num_action_samples = 200
+    num_fits = 10
     gamma = 0.9
 
     # setup environment
@@ -40,49 +97,54 @@ def main():
         actions = np.stack([np.array(a) for a in it.product(ally_actions, repeat=num_allies)]) * step_size
         return actions
 
-    # feature extraction
-    def trig_encode(agents):
-        # helper for better heading features
-        # period invariant; 0 similar to 2pi
-        xy, angles = agents[...,:2], agents[...,2:]
-        c, s = np.cos(angles), np.sin(angles)
-        return np.concatenate((xy, c, s), axis=-1)
+    # # feature extraction
+    get_features = FeatureExtractor(env)
+    
+    # def trig_encode(agents):
+    #     # helper for better heading features
+    #     # period invariant; 0 similar to 2pi
+    #     xy, angles = agents[...,:2], agents[...,2:]
+    #     c, s = np.cos(angles), np.sin(angles)
+    #     return np.concatenate((xy, c, s), axis=-1)
 
-    @profile
-    def get_features(observation):
+    # @profile
+    # def get_features(observation):
 
-        # get allies and adversaries coordinates
-        split = 3*env.num_allies
-        allies, adversaries = observation[...,:split], observation[...,split:]
-        allies = allies.reshape(-1, env.num_allies, 3)
-        adversaries = adversaries.reshape(-1, env.num_adversaries, 3)
+    #     # get allies and adversaries coordinates
+    #     split = 3*env.num_allies
+    #     allies, adversaries = observation[...,:split], observation[...,split:]
+    #     allies = allies.reshape(-1, env.num_allies, 3)
+    #     adversaries = adversaries.reshape(-1, env.num_adversaries, 3)
 
-        # encode angles
-        allies = trig_encode(allies)
-        adversaries = trig_encode(adversaries)
+    #     # encode angles
+    #     allies = trig_encode(allies)
+    #     adversaries = trig_encode(adversaries)
 
-        # sort allies and adversaries for permutation in/equivariance
-        allies_idx = np.lexsort(np.transpose(allies, (2, 0, 1)), axis=1)
-        adversaries_idx = np.lexsort(np.transpose(adversaries, (2, 0, 1)), axis=1)
-        features = np.concatenate([
-            np.take_along_axis(allies, allies_idx[:,:,None], axis=1).reshape(len(allies), env.num_allies*4),
-            np.take_along_axis(adversaries, adversaries_idx[:,:,None], axis=1).reshape(len(adversaries), env.num_adversaries*4),
-            np.ones((len(allies), 1)) # for bias
-            ], axis=1)
+    #     # sort allies and adversaries for permutation in/equivariance
+    #     allies_idx = np.lexsort(np.transpose(allies, (2, 0, 1)), axis=1)
+    #     adversaries_idx = np.lexsort(np.transpose(adversaries, (2, 0, 1)), axis=1)
+    #     features = np.concatenate([
+    #         np.take_along_axis(allies, allies_idx[:,:,None], axis=1).reshape(len(allies), env.num_allies*4),
+    #         np.take_along_axis(adversaries, adversaries_idx[:,:,None], axis=1).reshape(len(adversaries), env.num_adversaries*4),
+    #         np.ones((len(allies), 1)) # for bias
+    #         ], axis=1)
 
-        # apply kernel
+    #     # apply kernel
 
-        # quadratic model
-        features = (features[:,:,None] * features[:,None,:]).reshape(len(allies),-1)
-        # # cubic model
-        # features = (features[:,None,None] * features[None,:,None] * sorted_obs).flatten()
+    #     # quadratic model
+    #     features = (features[:,:,None] * features[:,None,:]).reshape(len(allies),-1)
+    #     # # cubic model
+    #     # features = (features[:,None,None] * features[None,:,None] * sorted_obs).flatten()
 
-        return features, allies_idx
+    #     return features, allies_idx
 
     # discretized actions
     actions = get_actions()
     data_size = num_state_samples * len(actions) * num_action_samples
     # input(f"{num_state_samples} * {len(actions)} * {num_action_samples} = {data_size}...")
+
+    # upper bound value
+    max_value = env.get_max_reward() / (1 - gamma)
 
     # large sample for value iteration
     state = env.random_state(batch_size=num_state_samples)
@@ -94,13 +156,14 @@ def main():
     if resume:
 
         with open("fqvi.pkl","rb") as f: results = pk.load(f)
-        current_errors, new_errors, critic_changes, critic_V, critic_Q = results
+        current_errors, new_errors, critic_changes, critic_mags, critic_V, critic_Q = results
 
     else:
 
         current_errors = []
         new_errors = []
         critic_changes = []
+        critic_mags = []
         critic_V = np.zeros(features.shape[1])
         critic_Q = np.zeros((features.shape[1], len(actions)))
 
@@ -136,7 +199,8 @@ def main():
 
                     # get max next-state Q value
                     # input(f"{next_features.shape} @ {critic_V.shape}")
-                    val = (next_features @ critic_V)
+                    # val = (next_features @ critic_V)
+                    val = max_value * np.tanh(next_features @ critic_V)
 
                     # update average
                     next_values[:,a] += val / num_action_samples
@@ -146,27 +210,36 @@ def main():
             bellman_Q = reward[:,None] + gamma * next_values
             
             # current_error = np.fabs(features @ critic_V - bellman_V).mean()
-            current_error = ((features @ critic_V - bellman_V)**2).mean()
+            # current_error = ((features @ critic_V - bellman_V)**2).mean()
+            current_error = ((max_value * np.tanh(features @ critic_V) - bellman_V)**2).mean()
             current_errors.append(current_error)
 
             # fit new critics
-            new_critic_V = np.linalg.lstsq(features, bellman_V, rcond=None)[0]
-            new_critic_Q = np.linalg.lstsq(features, bellman_Q, rcond=None)[0]
+            # new_critic_V = np.linalg.lstsq(features, bellman_V, rcond=None)[0]
+            # new_critic_Q = np.linalg.lstsq(features, bellman_Q, rcond=None)[0]
+            new_critic_V = np.linalg.lstsq(features, np.arctanh(bellman_V / max_value), rcond=None)[0]
+            new_critic_Q = np.linalg.lstsq(features, np.arctanh(bellman_Q / max_value), rcond=None)[0]
+
             # new_error = np.fabs(features @ new_critic_V - bellman_V).mean()
-            new_error = ((features @ new_critic_V - bellman_V)**2).mean()
+            # new_error = ((features @ new_critic_V - bellman_V)**2).mean()
+            new_error = ((max_value * np.tanh(features @ new_critic_V) - bellman_V)**2).mean()
             new_errors.append(new_error)
 
             # critic change
             critic_change = np.fabs(new_critic_V - critic_V).mean()
             critic_changes.append(critic_change)
 
+            # critic magnitude
+            critic_mag = np.fabs(critic_V).max()
+            critic_mags.append(critic_mag)
+
             # update critic
             critic_V = new_critic_V
             critic_Q = new_critic_Q
 
-            print(f"fit {fit} of {num_fits}, {current_error=:.5f}, {new_error=:.5f}, {critic_change=:.5f}")
+            print(f"fit {fit} of {num_fits}, {current_error=:.5f}, {new_error=:.5f}, {critic_change=:.5f}, {critic_mag=:.5f}")
 
-        results = (current_errors, new_errors, critic_changes, critic_V, critic_Q)
+        results = (current_errors, new_errors, critic_changes, critic_mags, critic_V, critic_Q)
         with open("fqvi.pkl","wb") as f: pk.dump(results, f)
 
     if do_show:
@@ -177,32 +250,36 @@ def main():
         print(np.fabs(critic_V).max())
 
         import matplotlib.pyplot as pt
-        pt.subplot(1,4,1)
+        pt.subplot(1,5,1)
         pt.plot(current_errors)
-        pt.subplot(1,4,2)
+        pt.subplot(1,5,2)
         pt.plot(new_errors)
-        pt.subplot(1,4,3)
+        pt.subplot(1,5,3)
         pt.plot(critic_changes)
-        pt.subplot(1,4,4)
+        pt.subplot(1,5,4)
+        pt.plot(critic_mags)
+        pt.subplot(1,5,5)
         pt.imshow(critic_Q)
         pt.show()
-    
+
         # animate agent
         input("[Enter] to run agent")
         pt.ion()
         pt.figure()
+
+        # create unbatched policy function
+        policy = Policy(get_features, actions, critic_Q)
+
+        # save env and policy as black box
+        with open("fqvi_bb.pkl", "wb") as f: pk.dump( (env, policy), f)
+        # with open("fqvi_bb.pkl", "wb") as f: pk.dump(env, f)
     
         observation, info = env.reset()
         states = [env.state] # precompute intermediate states along plan
         for t in range(500):
             env.render(pt.gca(), hang=False, msg = f"t={t}, r={env.reward_function(env.state)}")
-    
-            features, allies_idx = get_features(observation)
-            action = actions[(features @ critic_Q).argmax()]
-            reordered_action = np.empty(allies_idx.shape + (3,))
-            np.put_along_axis(reordered_action, allies_idx[:,:,None], action[None], axis=1)
-    
-            observation, reward, _, _, _ = env.step(reordered_action[0])
+            action = policy(observation)
+            observation, reward, _, _, _ = env.step(action)
             states.append(env.state)
             pt.pause(0.01)
 
@@ -219,6 +296,6 @@ def main():
         print("saving...")
         anim.save("fqvi.mp4")
 
-if __name__ == "__main__": main()
+# if __name__ == "__main__": main()
 
 

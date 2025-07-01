@@ -69,7 +69,7 @@ class PlanarEnv:
         self.action_space = PlanarActionSpace(num_allies, self.step_size, self.rng)
         self.state = None
 
-    @profile
+    # @profile
     def transition(self, state, agent_motion, opponent_motion=None):
         # assumes |agent_motion| <= self.step_size
         # should support batching in the state
@@ -87,7 +87,7 @@ class PlanarEnv:
         return PlanarState(self, allies, adversaries)
 
 
-    @profile
+    # @profile
     def _team_reward(self, team, opponents):
 
         # batched
@@ -106,11 +106,17 @@ class PlanarEnv:
         ## densest: unclipped, decaying deltas
         return np.exp(- deltas / self.view_angle).sum(axis=(-2,-1))
 
-    @profile
+    # @profile
     def reward_function(self, state):
         allies_reward = self._team_reward(state.allies, state.adversaries)
         adversaries_reward = self._team_reward(state.adversaries, state.allies)
         return allies_reward - adversaries_reward
+
+    def get_max_reward(self):
+        # sparse
+        # denser
+        # densest: all adversaries viewed by allies but none vice versa
+        return 1. * self.num_allies * self.num_adversaries
 
     def random_state(self, batch_size=None):
 
@@ -156,7 +162,7 @@ class PlanarEnv:
         info = None
         return observation, info
 
-    @profile
+    # @profile
     def step(self, action, opponent_motion=None):
 
         # make sure action in action space
@@ -188,7 +194,7 @@ class PlanarEnv:
         elif msg is not None: print(msg)
 
 
-@profile
+# @profile
 def batch_test():
     num_allies, num_adversaries = 5, 4
     env = PlanarEnv(num_allies, num_adversaries, .01, view_angle=np.pi/8)
