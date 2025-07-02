@@ -72,7 +72,8 @@ class PlanarEnv:
     # @profile
     def transition(self, state, agent_motion, opponent_motion=None):
         # assumes |agent_motion| <= self.step_size
-        # should support batching in the state
+        # agents and motions should broadcast to same shape with leading batch dimensions
+        # agent[...,num_agents, 3] and motion[...,num_agents, 3]
 
         if opponent_motion is None:
             opponent_motion = self.step_size * self.rng.uniform(-1, 1, state.adversaries.shape)

@@ -5,69 +5,14 @@ from line_profiler import profile # python -m kernprof -lvr fqvi.py
 import itertools as it
 import numpy as np
 import pickle as pk
-
-class Policy:
-    def __init__(self, get_features, actions, critic_Q):
-        self.get_features = get_features
-        self.actions = actions
-        self.critic_Q = critic_Q
-
-    def __call__(self, observation):
-        features, allies_idx = self.get_features(observation)
-        action = self.actions[(features @ self.critic_Q).argmax()]
-        reordered_action = np.empty(allies_idx.shape + (3,))
-        np.put_along_axis(reordered_action, allies_idx[:,:,None], action[None], axis=1)
-        return reordered_action[0]
-
-class FeatureExtractor:
-    def __init__(self, env):
-        self.env = env
-
-    def trig_encode(self, agents):
-        # helper for better heading features
-        # period invariant; 0 similar to 2pi
-        xy, angles = agents[...,:2], agents[...,2:]
-        c, s = np.cos(angles), np.sin(angles)
-        return np.concatenate((xy, c, s), axis=-1)
-
-    @profile
-    def __call__(self, observation):
-        env = self.env
-
-        # get allies and adversaries coordinates
-        split = 3*env.num_allies
-        allies, adversaries = observation[...,:split], observation[...,split:]
-        allies = allies.reshape(-1, env.num_allies, 3)
-        adversaries = adversaries.reshape(-1, env.num_adversaries, 3)
-
-        # encode angles
-        allies = self.trig_encode(allies)
-        adversaries = self.trig_encode(adversaries)
-
-        # sort allies and adversaries for permutation in/equivariance
-        allies_idx = np.lexsort(np.transpose(allies, (2, 0, 1)), axis=1)
-        adversaries_idx = np.lexsort(np.transpose(adversaries, (2, 0, 1)), axis=1)
-        features = np.concatenate([
-            np.take_along_axis(allies, allies_idx[:,:,None], axis=1).reshape(len(allies), env.num_allies*4),
-            np.take_along_axis(adversaries, adversaries_idx[:,:,None], axis=1).reshape(len(adversaries), env.num_adversaries*4),
-            np.ones((len(allies), 1)) # for bias
-            ], axis=1)
-
-        # apply kernel
-
-        # quadratic model
-        features = (features[:,:,None] * features[:,None,:]).reshape(len(allies),-1)
-        # # cubic model
-        # features = (features[:,None,None] * features[None,:,None] * sorted_obs).flatten()
-
-        return features, allies_idx
+from fqvi_helpers import Policy, FeatureExtractor
 
 # @profile
 # def main():
 if __name__ == "__main__":
 
     do_show = True
-    do_train = True
+    do_train = False
     resume = True
 
     num_state_samples = 1000
@@ -95,48 +40,10 @@ if __name__ == "__main__":
         ally_actions = list(m + (t,) for (m,t) in it.product(moves, (-1,0,1)))
         # ally_actions = list(m + (t,) for (m,t) in it.product(moves, (-1,1)))
         actions = np.stack([np.array(a) for a in it.product(ally_actions, repeat=num_allies)]) * step_size
-        return actions
+        return actions # (num_actions, num_agents, 3)
 
     # # feature extraction
     get_features = FeatureExtractor(env)
-    
-    # def trig_encode(agents):
-    #     # helper for better heading features
-    #     # period invariant; 0 similar to 2pi
-    #     xy, angles = agents[...,:2], agents[...,2:]
-    #     c, s = np.cos(angles), np.sin(angles)
-    #     return np.concatenate((xy, c, s), axis=-1)
-
-    # @profile
-    # def get_features(observation):
-
-    #     # get allies and adversaries coordinates
-    #     split = 3*env.num_allies
-    #     allies, adversaries = observation[...,:split], observation[...,split:]
-    #     allies = allies.reshape(-1, env.num_allies, 3)
-    #     adversaries = adversaries.reshape(-1, env.num_adversaries, 3)
-
-    #     # encode angles
-    #     allies = trig_encode(allies)
-    #     adversaries = trig_encode(adversaries)
-
-    #     # sort allies and adversaries for permutation in/equivariance
-    #     allies_idx = np.lexsort(np.transpose(allies, (2, 0, 1)), axis=1)
-    #     adversaries_idx = np.lexsort(np.transpose(adversaries, (2, 0, 1)), axis=1)
-    #     features = np.concatenate([
-    #         np.take_along_axis(allies, allies_idx[:,:,None], axis=1).reshape(len(allies), env.num_allies*4),
-    #         np.take_along_axis(adversaries, adversaries_idx[:,:,None], axis=1).reshape(len(adversaries), env.num_adversaries*4),
-    #         np.ones((len(allies), 1)) # for bias
-    #         ], axis=1)
-
-    #     # apply kernel
-
-    #     # quadratic model
-    #     features = (features[:,:,None] * features[:,None,:]).reshape(len(allies),-1)
-    #     # # cubic model
-    #     # features = (features[:,None,None] * features[None,:,None] * sorted_obs).flatten()
-
-    #     return features, allies_idx
 
     # discretized actions
     actions = get_actions()
@@ -278,7 +185,7 @@ if __name__ == "__main__":
         states = [env.state] # precompute intermediate states along plan
         for t in range(500):
             env.render(pt.gca(), hang=False, msg = f"t={t}, r={env.reward_function(env.state)}")
-            action = policy(observation)
+            action = policy(observation[None])[0] # unbatched
             observation, reward, _, _, _ = env.step(action)
             states.append(env.state)
             pt.pause(0.01)
