@@ -14,14 +14,14 @@ if __name__ == "__main__":
     do_train = True
     resume = False
 
-    num_state_samples = 64
-    num_transit_samples = 32
-    num_updates = 1000
+    num_state_samples = 128
+    num_transit_samples = 128
+    num_updates = 20000
     gamma = 0.9
 
     # setup environment
-    num_allies = 2
-    num_adversaries = 2
+    num_allies = 1
+    num_adversaries = 1
     view_angle = np.pi/16
     step_size = np.array([0.05, 0.05, .1]) # larger rotational motion
 
@@ -36,31 +36,37 @@ if __name__ == "__main__":
     get_features = FeatureExtractor(env)
 
     policy_net = tr.nn.Sequential(
-        tr.nn.Linear(get_features.get_feature_dim(), 32),
+        tr.nn.Linear(get_features.get_feature_dim(), 128),
         tr.nn.LeakyReLU(),
-        tr.nn.Linear(32, 32),
+        tr.nn.Linear(128, 128),
         tr.nn.LeakyReLU(),
-        tr.nn.Linear(32, env.num_allies*3),
+        tr.nn.Linear(128, env.num_allies*3),
         tr.nn.Tanh())
 
     value_net = tr.nn.Sequential(
-        tr.nn.Linear(get_features.get_feature_dim(), 32),
+        tr.nn.Linear(get_features.get_feature_dim(), 128),
         tr.nn.LeakyReLU(),
-        tr.nn.Linear(32, 32),
+        tr.nn.Linear(128, 128),
         tr.nn.LeakyReLU(),
-        tr.nn.Linear(32, 1),
+        tr.nn.Linear(128, 1),
         tr.nn.Tanh())
 
     quad_net = tr.nn.Sequential(
-        tr.nn.Linear(get_features.get_feature_dim(), 32),
+        tr.nn.Linear(get_features.get_feature_dim(), 128),
         tr.nn.LeakyReLU(),
-        tr.nn.Linear(32, 32),
+        tr.nn.Linear(128, 128),
         tr.nn.LeakyReLU(),
-        tr.nn.Linear(32, (env.num_allies*3)**2))
+        tr.nn.Linear(128, (env.num_allies*3)**2))
 
-    parameters = list(policy_net.parameters()) + list(value_net.parameters()) + list(quad_net.parameters())
-    # opt = tr.optim.SGD(parameters, lr=0.01)
-    opt = tr.optim.Adam(parameters, lr=0.005)
+    if resume:
+        policy_net.load_state_dict(tr.load('dq_p.pt', weights_only=True))
+        value_net.load_state_dict(tr.load('dq_v.pt', weights_only=True))
+        quad_net.load_state_dict(tr.load('dq_q.pt', weights_only=True))
+
+    else:
+        parameters = list(policy_net.parameters()) + list(value_net.parameters()) + list(quad_net.parameters())
+        # opt = tr.optim.SGD(parameters, lr=0.01)
+        opt = tr.optim.Adam(parameters, lr=0.0025)
 
     loss_curve = []
     for update in range(num_updates if do_train else 0):
@@ -80,9 +86,6 @@ if __name__ == "__main__":
             next_features.append(get_features(next_observation)[0])
         next_features = np.stack(next_features)
 
-        # sort original actions to match policy output order
-        action = action[allies_idx]...?
-
         # pass features through function approximators
         features = tr.tensor(features)
         action = tr.tensor(action)
@@ -95,9 +98,16 @@ if __name__ == "__main__":
         next_U = value_net(next_features)
 
         # put actions and values in correct ranges
-        A = (A.reshape(-1, env.num_allies, 3) * tr.tensor(step_size)).reshape(-1, env.num_allies*3)
+        A = A.reshape(-1, env.num_allies, 3) * tr.tensor(step_size)
         U = U * env.get_max_reward()
         next_U = next_U * env.get_max_reward()
+
+        # sort policy output to match original ally order
+        inverse_idx = tr.tensor(np.argsort(allies_idx, axis=-1))
+        A = tr.take_along_dim(A, inverse_idx[...,None], -2)
+
+        # flatten policy output again for matrix multiply
+        A = A.reshape(-1, env.num_allies*3)
 
         # put quad coefficient in correct shape and batch multiply
         M = M.reshape(-1, env.num_allies*3, env.num_allies*3)
@@ -117,8 +127,52 @@ if __name__ == "__main__":
         # progress update
         print(f"{update=} of {num_updates}, {loss=:.5f}")
 
+    # save results
+    tr.save(policy_net.state_dict(), 'dq_p.pt')
+    tr.save(value_net.state_dict(), 'dq_v.pt')
+    tr.save(quad_net.state_dict(), 'dq_q.pt')
+
     import matplotlib.pyplot as pt
     pt.plot(loss_curve)
     pt.yscale('log')
     pt.show()
+
+    # render policy behavior
+    if do_show:
+        observation, info = env.reset()
+        states = [env.state] # precompute intermediate states along plan
+        for t in range(200):
+            env.render(pt.gca(), hang=False, msg = f"t={t}, r={env.reward_function(env.state)}")
+
+            # run policy
+            features, allies_idx = get_features(observation)
+    
+            # pass features through function approximator
+            features = tr.tensor(features)
+            A = policy_net(features[None]) # batch
+    
+            # put actions and values in correct ranges
+            A = A.reshape(-1, env.num_allies, 3) * tr.tensor(step_size)
+    
+            # sort policy output to match original ally order
+            inverse_idx = tr.tensor(np.argsort(allies_idx, axis=-1))
+            A = tr.take_along_dim(A, inverse_idx[...,None], -2)
+
+            action = A.detach().numpy()[0] # unbatch
+            observation, reward, _, _, _ = env.step(action)
+            states.append(env.state)
+            pt.pause(0.01)
+
+        input('[Enter] to animate...')
+
+        import matplotlib.animation as animation
+    
+        fig, axs = pt.subplots(1,1)
+        def drawframe(n):
+            states[n].render(axs)
+    
+        print("animating...")
+        anim = animation.FuncAnimation(fig, drawframe, frames=len(states), interval=50, blit=False)
+        print("saving...")
+        anim.save("dq.mp4")
 
