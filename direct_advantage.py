@@ -1,27 +1,30 @@
 """
 Directly fit the optimal Q Bellman equation (no iteration) with utility and non-negative advantage approximations
 """
-from line_profiler import profile # python -m kernprof -lvr direct_quad.py
+from line_profiler import profile # python -m kernprof -lvr direct_advantage.py
 import numpy as np
 import torch as tr
 from planar_features import FeatureExtractor
+from time import perf_counter
 
 tr.set_default_dtype(tr.float64)
 
-if __name__ == "__main__":
+@profile
+def main():
 
     do_show = True
     do_train = True
-    resume = False
+    do_render = False
+    resume = True
 
-    num_state_samples = 2048
-    num_transit_samples = 32
+    num_state_samples = 32
+    num_transit_samples = 8
     num_updates = 30000
     gamma = 0.9
 
     # setup environment
-    num_allies = 1
-    num_adversaries = 1
+    num_allies = 2
+    num_adversaries = 2
     view_angle = np.pi/16
     step_size = np.array([0.05, 0.05, .1]) # larger rotational motion
 
@@ -36,19 +39,27 @@ if __name__ == "__main__":
     get_features = FeatureExtractor(env)
 
     value_net = tr.nn.Sequential(
-        tr.nn.Linear(get_features.get_feature_dim(), 32),
+        tr.nn.Linear(get_features.get_feature_dim(), 128),
         tr.nn.LeakyReLU(),
-        tr.nn.Linear(32, 32),
+        tr.nn.Linear(128, 128),
         tr.nn.LeakyReLU(),
-        tr.nn.Linear(32, 1),
+        tr.nn.Linear(128, 128),
+        tr.nn.LeakyReLU(),
+        tr.nn.Linear(128, 128),
+        tr.nn.LeakyReLU(),
+        tr.nn.Linear(128, 1),
         tr.nn.Tanh())
 
     advantage_net = tr.nn.Sequential(
-        tr.nn.Linear(get_features.get_feature_dim() + env.num_allies*3, 64),
+        tr.nn.Linear(get_features.get_feature_dim() + env.num_allies*3, 128),
         tr.nn.LeakyReLU(),
-        tr.nn.Linear(64, 64),
+        tr.nn.Linear(128, 128),
         tr.nn.LeakyReLU(),
-        tr.nn.Linear(64, 1),
+        tr.nn.Linear(128, 128),
+        tr.nn.LeakyReLU(),
+        tr.nn.Linear(128, 128),
+        tr.nn.LeakyReLU(),
+        tr.nn.Linear(128, 1),
         tr.nn.Sigmoid())
 
     parameters = list(value_net.parameters()) + list(advantage_net.parameters())
@@ -64,10 +75,12 @@ if __name__ == "__main__":
     else:
         loss_curve = []
 
+    start_time = perf_counter()
+
     for update in range(num_updates if do_train else 0):
 
-        # if True:
-        if update == 0:
+        if True:
+        # if update == 0:
 
             state = env.random_state(batch_size=num_state_samples)
             observation = env.get_observation(state)
@@ -103,9 +116,6 @@ if __name__ == "__main__":
         Q = U - deficit
         bellman = reward.reshape(-1, 1) + gamma * next_U.mean(dim=0)
         loss = tr.mean((Q - bellman)**2)
-        # loss = tr.mean(tr.abs(Q - bellman))
-        # diff = Q - bellman
-        # loss = tr.mean(tr.where(tr.abs(diff) < 1, .5 * diff**2, tr.abs(diff) - .5))
         loss_curve.append(loss.item())
 
         # gradient descent
@@ -116,49 +126,75 @@ if __name__ == "__main__":
         # progress update
         print(f"{update=} of {num_updates}, {loss=:.5f}")
 
-    import matplotlib.pyplot as pt
-    pt.plot(loss_curve)
-    pt.yscale('log')
-    pt.show()
+    run_time = perf_counter() - start_time
 
-    # # render policy behavior
-    # if do_show:
-    #     observation, info = env.reset()
-    #     states = [env.state] # precompute intermediate states along plan
-    #     for t in range(100):
-    #         env.render(pt.gca(), hang=False, msg = f"t={t}, r={env.reward_function(env.state)}")
-
-    #         # run policy
-    #         features, allies_idx = get_features(observation)
-    
-    #         # pass features through function approximator
-    #         features = tr.tensor(features)
-    #         A = policy_net(features[None]) # batch
-    
-    #         # put actions and values in correct ranges
-    #         A = A.reshape(-1, env.num_allies, 3) * tr.tensor(step_size)
-    
-    #         # sort policy output to match original ally order
-    #         inverse_idx = tr.tensor(np.argsort(allies_idx, axis=-1))
-    #         A = tr.take_along_dim(A, inverse_idx[...,None], -2)
-
-    #         action = A.detach().numpy()[0] # unbatch
-    #         print("action:", action)
-    #         observation, reward, _, _, _ = env.step(action)
-    #         states.append(env.state)
-    #         pt.pause(0.01)
+    if do_show:
+        import matplotlib.pyplot as pt
+        bucket = len(loss_curve)//100
+        trend = np.array(loss_curve).reshape(-1, bucket).mean(axis=-1)
+        pt.plot(loss_curve, 'b-')
+        pt.plot(np.arange(0, len(loss_curve), bucket), trend, 'k-')
+        pt.yscale('log')
+        pt.show()
 
     # save results
-    input('enter to save, ctrl-c to abort')
-    checkpoint = {
-        "value_net": value_net.state_dict(),
-        "advantage_net": advantage_net.state_dict(),
-        "opt": opt.state_dict(),
-        "loss_curve": loss_curve,
-    }
-    tr.save(checkpoint, "da.pt")
+    if do_train:
+        input(f'{num_updates} took {run_time}s. enter to save, ctrl-c to abort')
+        # print(f'{num_updates} took {run_time}s')
+        checkpoint = {
+            "value_net": value_net.state_dict(),
+            "advantage_net": advantage_net.state_dict(),
+            "opt": opt.state_dict(),
+            "loss_curve": loss_curve,
+        }
+        tr.save(checkpoint, "da.pt")
 
-    # if do_show:
+    # render policy behavior
+    if do_render:
+        advantage_net.eval()
+        observation, info = env.reset()
+        states = [env.state] # precompute intermediate states along plan
+        
+        _, render_ax = pt.subplots(1,1)
+        _, deficit_ax = pt.subplots(1,1)
+        
+        for t in range(100):
+            env.render(render_ax, hang=False, msg = f"t={t}, r={env.reward_function(env.state)}")
+
+            # optimize action through advantage function
+            features, allies_idx = get_features(observation[None])
+            features = tr.tensor(features) # batched for policy
+            sorted_action = tr.zeros(env.num_allies, 3, requires_grad=True)
+            action_opt = tr.optim.Adam([sorted_action], lr=.1)
+
+            deficit_curve = []
+            for action_update in range(100):
+                deficit = advantage_net(tr.cat([features, sorted_action.reshape(1, -1)], dim=-1))
+                deficit_curve.append(deficit.item())
+
+                deficit[0,0].backward() # unbatched
+                action_opt.step()
+                action_opt.zero_grad()
+                sorted_action.data = sorted_action.data.clamp(-tr.tensor(step_size), tr.tensor(step_size))
+                print(sorted_action.data.numpy())
+
+                if (tr.abs(sorted_action.data) == tr.tensor(step_size)).all(): break
+
+            # deficit_ax.clear()
+            # deficit_ax.plot(deficit_curve)
+
+            # unsort action to match original ally order
+            inverse_idx = tr.tensor(np.argsort(allies_idx[0], axis=-1)) # unbatched
+            action = tr.take_along_dim(sorted_action, inverse_idx[...,None], -2)
+
+            # execute action
+            action = action.detach().numpy()
+            observation, reward, _, _, _ = env.step(action)
+            states.append(env.state)
+            pt.pause(0.01)
+
+            # input(f"{action_update} action updates: deficit, action = {deficit.item()}, {action}")
+
     #     input('[Enter] to animate...')
 
     #     import matplotlib.animation as animation
@@ -173,4 +209,5 @@ if __name__ == "__main__":
     #     anim.save("da.mp4")
 
 
+if __name__ == "__main__": main()
 
