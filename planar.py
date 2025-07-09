@@ -169,7 +169,7 @@ class PlanarEnv:
         # make sure action in action space
         # print(np.fabs(action))
         # print(self.step_size)
-        assert (np.fabs(action) <= self.step_size).all()
+        assert (np.fabs(action) <= self.step_size).all(), str(action)
 
         reward = self.reward_function(self.state)
         self.state = self.transition(self.state, action, opponent_motion)
