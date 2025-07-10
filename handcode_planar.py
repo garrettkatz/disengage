@@ -47,9 +47,9 @@ class Policy:
         sins = (diffs * advr_90[...,None,:]).sum(axis=-1)
         angles = np.arctan2(sins, coss)
         closest = np.argmin(np.fabs(angles), axis=-2)
-        angle = np.take_along_axis(angles, closest[...,None,:], axis=-2)
+        angle = np.take_along_axis(angles, closest[...,None,:], axis=-2)[...,0,:]
         delta = np.take_along_axis(advr_90, closest[...,None], axis=-2)
-        delta *= np.sign(angle)
+        delta *= np.sign(angle[...,None])
         action[...,:2] = delta
 
         action = np.clip(action, -self.env.step_size, self.env.step_size)
@@ -59,8 +59,8 @@ class Policy:
 if __name__ == "__main__":
 
     # setup environment
-    num_allies = 2
-    num_adversaries = 2
+    num_allies = 3
+    num_adversaries = 4
     view_angle = np.pi/16
     step_size = np.array([0.05, 0.05, .1]) # larger rotational motion
 
