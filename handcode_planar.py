@@ -24,6 +24,7 @@ class Policy:
         ally_90 = np.stack([-np.sin(allies[...,2]), np.cos(allies[...,2])], axis=-1)
         advr_xy = adversaries[...,:2]
         advr_cs = np.stack([np.cos(adversaries[...,2]), np.sin(adversaries[...,2])], axis=-1)
+        advr_90 = np.stack([-np.sin(adversaries[...,2]), np.cos(adversaries[...,2])], axis=-1)
 
         diffs = advr_xy[...,None,:,:] - ally_xy[...,None,:]
         diffs /= np.maximum(np.linalg.norm(diffs, axis=-1, keepdims=True), 1e-6)
@@ -37,7 +38,19 @@ class Policy:
 
         ## move in the opposite direction of adversary's field of view
         ## HACK! find closest here too
-        action[...,:2] = -advr_cs.mean(axis=-2,keepdims=True)
+        # action[...,:2] = -advr_cs.mean(axis=-2,keepdims=True)
+
+        # move away from closest adverary line of sight
+        diffs = ally_xy[...,None,:,:] - advr_xy[...,None,:]
+        diffs /= np.maximum(np.linalg.norm(diffs, axis=-1, keepdims=True), 1e-6)
+        coss = (diffs * advr_cs[...,None,:]).sum(axis=-1)
+        sins = (diffs * advr_90[...,None,:]).sum(axis=-1)
+        angles = np.arctan2(sins, coss)
+        closest = np.argmin(np.fabs(angles), axis=-2)
+        angle = np.take_along_axis(angles, closest[...,None,:], axis=-2)
+        delta = np.take_along_axis(advr_90, closest[...,None], axis=-2)
+        delta *= np.sign(angle)
+        action[...,:2] = delta
 
         action = np.clip(action, -self.env.step_size, self.env.step_size)
         return action        

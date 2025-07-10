@@ -19,7 +19,7 @@ def main():
 
     num_state_samples = 32
     num_transit_samples = 8
-    num_updates = 300000
+    num_updates = 1_000_000
     gamma = 0.9
 
     # setup environment
