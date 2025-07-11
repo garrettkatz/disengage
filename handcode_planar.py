@@ -59,8 +59,8 @@ class Policy:
 if __name__ == "__main__":
 
     # setup environment
-    num_allies = 3
-    num_adversaries = 4
+    num_allies = 2
+    num_adversaries = 2
     view_angle = np.pi/16
     step_size = np.array([0.05, 0.05, .1]) # larger rotational motion
 
@@ -98,37 +98,44 @@ if __name__ == "__main__":
     # repeat 30 times for envelope comparison
     num_timesteps = 200
     num_episodes = 30
-    observation, info = env.reset(batch_size=num_episodes)
+    observation, info = env.reset()
+    env.state = env.state.expand_to(num_episodes)
+    observation = np.broadcast_to(observation, (num_episodes,) + observation.shape)
+
     rewards = np.empty((num_episodes, num_timesteps))
     for t in range(num_timesteps):
         action = policy(observation)
         observation, reward, _, _, _ = env.step(action)
         rewards[:,t] = reward
 
-    import pickle as pk
-    with open("envelope_best.pkl","rb") as f:
-        (envelope_rewards, better_rewards, _, _, _, _) = pk.load(f)
-
-    # render envelope
-    # pt.subplot(1,2,1)
-    pt.plot(np.arange(num_timesteps), np.arange(1, num_timesteps+1)*env.get_max_reward(), 'k--', label="theoretically optimal")
-
-    cumulative_rewards = envelope_rewards.cumsum(axis=1)
-    pt.fill_between(np.arange(num_timesteps), cumulative_rewards.min(axis=0), cumulative_rewards.max(axis=0), alpha=.1, color='r')
-    pt.plot(cumulative_rewards.mean(axis=0), 'r-', label="black-box-old")
-
-    better_cumulative_rewards = better_rewards.cumsum(axis=1)
-    pt.fill_between(np.arange(num_timesteps), better_cumulative_rewards.min(axis=0), better_cumulative_rewards.max(axis=0), alpha=.1, color='b')
-
-    cumulative_rewards = rewards.cumsum(axis=1)
-    pt.fill_between(np.arange(num_timesteps), cumulative_rewards.min(axis=0), cumulative_rewards.max(axis=0), alpha=.1, color='g')
-    pt.plot(cumulative_rewards.mean(axis=0), 'g-', label="black-box-new")
-
-    pt.plot(better_cumulative_rewards.mean(axis=0), 'b-', label="counterfactual-old")
-    pt.xlabel("Time-step")
-    pt.ylabel("Cumulative Reward")
-    pt.title(f"Performance mean and envelope ({num_episodes} episodes)")
-    pt.legend()
-    pt.savefig("blackboxnew.png")
+    # net reward distribution
+    pt.hist(rewards.sum(axis=-1))
     pt.show()
+
+    # import pickle as pk
+    # with open("envelope_best.pkl","rb") as f:
+    #     (envelope_rewards, better_rewards, _, _, _, _) = pk.load(f)
+
+    # # render envelope
+    # # pt.subplot(1,2,1)
+    # pt.plot(np.arange(num_timesteps), np.arange(1, num_timesteps+1)*env.get_max_reward(), 'k--', label="theoretically optimal")
+
+    # cumulative_rewards = envelope_rewards.cumsum(axis=1)
+    # pt.fill_between(np.arange(num_timesteps), cumulative_rewards.min(axis=0), cumulative_rewards.max(axis=0), alpha=.1, color='r')
+    # pt.plot(cumulative_rewards.mean(axis=0), 'r-', label="black-box-old")
+
+    # better_cumulative_rewards = better_rewards.cumsum(axis=1)
+    # pt.fill_between(np.arange(num_timesteps), better_cumulative_rewards.min(axis=0), better_cumulative_rewards.max(axis=0), alpha=.1, color='b')
+
+    # cumulative_rewards = rewards.cumsum(axis=1)
+    # pt.fill_between(np.arange(num_timesteps), cumulative_rewards.min(axis=0), cumulative_rewards.max(axis=0), alpha=.1, color='g')
+    # pt.plot(cumulative_rewards.mean(axis=0), 'g-', label="black-box-new")
+
+    # pt.plot(better_cumulative_rewards.mean(axis=0), 'b-', label="counterfactual-old")
+    # pt.xlabel("Time-step")
+    # pt.ylabel("Cumulative Reward")
+    # pt.title(f"Performance mean and envelope ({num_episodes} episodes)")
+    # pt.legend()
+    # pt.savefig("blackboxnew.png")
+    # pt.show()
 

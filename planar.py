@@ -20,6 +20,15 @@ class PlanarState:
         self.allies = allies
         self.adversaries = adversaries
 
+    def expand_to(self, batch_size):
+        # forms a batch of duplicates of self, to initialize rollouts
+        # assumes self is a single, unbatched state
+        assert len(self.allies.shape) == len(self.adversaries.shape) == 2
+
+        allies = np.broadcast_to(self.allies, (batch_size,) + self.allies.shape)
+        adversaries = np.broadcast_to(self.adversaries, (batch_size,) + self.adversaries.shape)
+        return PlanarState(self.env, allies, adversaries)
+
     def render(self, ax):
         """
         render current state on matplotlib Axes ax
@@ -132,23 +141,16 @@ class PlanarEnv:
         adversaries[...,2] *= _TPI
         return PlanarState(self, allies, adversaries)
 
-        # # unbatched
-        # allies = self.rng.uniform(size=(self.num_allies, 3))
-        # allies[:,2] *= _TPI
-        # adversaries = self.rng.uniform(size=(self.num_adversaries, 3))
-        # adversaries[:,2] *= _TPI
-        # return PlanarState(self, allies, adversaries)
+    def get_observation(self, state=None):
+        # call on current state by default
+        if state is None: return self.get_observation(self.state)
 
-    def get_observation(self, state):
         # batched
         if len(state.allies.shape) > 2:
             obs = np.concatenate([state.allies, state.adversaries], axis=1)
             return obs.reshape(obs.shape[0], -1) # flatten all but batch dim
         else:
             return np.concatenate((state.allies, state.adversaries), axis=None)
-
-        # # unbatched
-        # return np.concatenate((state.allies, state.adversaries), axis=None)
 
     def reset(self, seed=None, batch_size=None):
 

@@ -37,8 +37,7 @@ def main():
         init_state = env.state
     
         # expand for batching over episodes
-        init_state.allies = np.broadcast_to(init_state.allies, (num_episodes, env.num_allies, 3)) 
-        init_state.adversaries = np.broadcast_to(init_state.adversaries, (num_episodes, env.num_adversaries, 3))
+        init_state = init_state.expand_to(num_episodes)
         init_observation = np.broadcast_to(init_observation, (num_episodes,) + init_observation.shape)
     
         # use same opponent motions in each episode
