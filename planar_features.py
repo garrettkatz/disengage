@@ -6,6 +6,7 @@ import numpy as np
 
 class FeatureExtractor:
     def __init__(self, env, kernel=None):
+        assert kernel in (None, "quadratic", "cubic"), f"invalid kernel {kernel}"
         self.env = env
         self.kernel = kernel
 
