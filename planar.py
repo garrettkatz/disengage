@@ -29,6 +29,14 @@ class PlanarState:
         adversaries = np.broadcast_to(self.adversaries, (batch_size,) + self.adversaries.shape)
         return PlanarState(self.env, allies, adversaries)
 
+    def broadcast_to(self, leading_dims):
+        # expands leading batch dimensions with duplicates of self, to initialize rollouts
+        # self can already have some batch dimensions which become trailing
+
+        allies = np.broadcast_to(self.allies, leading_dims + self.allies.shape)
+        adversaries = np.broadcast_to(self.adversaries, leading_dims + self.adversaries.shape)
+        return PlanarState(self.env, allies, adversaries)
+
     def render(self, ax):
         """
         render current state on matplotlib Axes ax
@@ -147,8 +155,10 @@ class PlanarEnv:
 
         # batched
         if len(state.allies.shape) > 2:
-            obs = np.concatenate([state.allies, state.adversaries], axis=1)
-            return obs.reshape(obs.shape[0], -1) # flatten all but batch dim
+            # obs = np.concatenate([state.allies, state.adversaries], axis=1)
+            # return obs.reshape(obs.shape[0], -1) # flatten all but batch dim
+            obs = np.concatenate([state.allies, state.adversaries], axis=-2)
+            return obs.reshape(obs.shape[:-2] + (-1,)) # flatten non-batch dims
         else:
             return np.concatenate((state.allies, state.adversaries), axis=None)
 

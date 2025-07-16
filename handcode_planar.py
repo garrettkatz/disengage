@@ -14,9 +14,12 @@ class Policy:
     def __call__(self, observation):
         split = 3*self.env.num_allies
         allies, adversaries = observation[..., :split], observation[..., split:]
-        allies = allies.reshape(-1, self.env.num_allies, 3)
-        adversaries = adversaries.reshape(-1, self.env.num_adversaries, 3)
-        action = np.zeros((observation.shape[0], self.env.num_allies, 3))
+        # allies = allies.reshape(-1, self.env.num_allies, 3)
+        # adversaries = adversaries.reshape(-1, self.env.num_adversaries, 3)
+        # action = np.zeros((observation.shape[0], self.env.num_allies, 3))
+        allies = allies.reshape(observation.shape[:-1] + (self.env.num_allies, 3))
+        adversaries = adversaries.reshape(observation.shape[:-1] + (self.env.num_adversaries, 3))
+        action = np.zeros(observation.shape[:-1] + (self.env.num_allies, 3))
 
         ## keep closest adversary in field of view
         ally_xy = allies[...,:2]
