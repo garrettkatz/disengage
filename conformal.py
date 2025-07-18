@@ -13,7 +13,7 @@ if __name__ == "__main__":
 
     do_fit = False
     do_calibrate = False
-    do_test = False
+    do_test = True
     do_show = True
 
     # setup experiment parameters
@@ -177,6 +177,11 @@ if __name__ == "__main__":
 
 
     if do_show:
+
+        print("per-timestep undetected rates:")
+        print(undetected.mean(axis=0))
+        input(f"Existential undetected rate: {undetected.any(axis=1).mean()}...")
+
         import matplotlib.pyplot as pt
 
         # pt.subplot(1,2,1)
