@@ -115,19 +115,19 @@ class PlanarEnv:
         deltas = np.minimum((angles - headings) % _TPI, (headings - angles) % _TPI)
 
         # ## sparse: number of opponent viewed by at least one team member
-        # viz = deltas < self.view_angle
+        viz = deltas < self.view_angle
         # return viz.any(axis=-1).sum(axis=-1)
 
         # ## denser: clipped deltas
         # return np.maximum(0, 1 - deltas / self.view_angle).sum(axis=(-2,-1))
 
         ## densest: unclipped, decaying deltas
-        return np.exp(- deltas / self.view_angle).sum(axis=(-2,-1))
+        return np.exp(- deltas / self.view_angle).sum(axis=(-2,-1)), viz
 
     # @profile
     def reward_function(self, state):
-        allies_reward = self._team_reward(state.allies, state.adversaries)
-        adversaries_reward = self._team_reward(state.adversaries, state.allies)
+        allies_reward, _ = self._team_reward(state.allies, state.adversaries)
+        adversaries_reward, _ = self._team_reward(state.adversaries, state.allies)
         return allies_reward - adversaries_reward
 
     def get_max_reward(self):

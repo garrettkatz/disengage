@@ -11,8 +11,8 @@ import pickle as pk
 
 if __name__ == "__main__":
 
-    do_fit = False
-    do_calibrate = False
+    do_fit = True
+    do_calibrate = True
     do_test = True
     do_show = True
 
@@ -24,7 +24,7 @@ if __name__ == "__main__":
 
     num_samples = 512 # number of samples for fitting each value function
     num_rollouts = 64 # number of rollouts used to empirically estimate value function
-    num_timesteps = 128
+    num_timesteps = 32#128
     sig_level = 0.05 # overall significance level
 
     # setup environment, policy, feature extractor
