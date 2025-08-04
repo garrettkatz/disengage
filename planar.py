@@ -149,6 +149,21 @@ class PlanarEnv:
         adversaries[...,2] *= _TPI
         return PlanarState(self, allies, adversaries)
 
+    def random_upperhand_state(self, batch_size=None):
+        if batch_size is None:
+            agents = self.rng.uniform(size=(self.num_allies+self.num_adversaries, 3))
+        else:
+            agents = self.rng.uniform(size=(batch_size, self.num_allies+self.num_adversaries, 3))
+
+        # restrict view fields upper half plane
+        agents[...,2] = self.view_angle + agents[...,2]*(np.pi - 2*self.view_angle)
+
+        # sort y coordinates so allies will start unseen
+        agents[...,1] = np.sort(agents[...,1])
+
+        return PlanarState(self, agents[...,:self.num_allies,:], agents[...,self.num_allies:,:])
+
+
     def get_observation(self, state=None):
         # call on current state by default
         if state is None: return self.get_observation(self.state)
@@ -162,13 +177,16 @@ class PlanarEnv:
         else:
             return np.concatenate((state.allies, state.adversaries), axis=None)
 
-    def reset(self, seed=None, batch_size=None):
+    def reset(self, seed=None, batch_size=None, upperhand=False):
 
         if seed is not None:
             self.rng = np.random.default_rng(seed)
 
         # initialize state
-        self.state = self.random_state(batch_size)
+        if upperhand:
+            self.state = self.random_upperhand_state(batch_size)
+        else:
+            self.state = self.random_state(batch_size)
 
         # return observation and info
         observation = self.get_observation(self.state)
@@ -235,8 +253,13 @@ if __name__ == "__main__":
     # for _ in range(100):
     #     batch_test()
 
-    num_allies, num_adversaries = 3, 3
+    num_allies, num_adversaries = 2, 2
     env = PlanarEnv(num_allies, num_adversaries, step_size=.01, view_angle=np.pi/8)
+
+    env.reset(upperhand=True)
+    env.render(pt.gca())
+    pt.savefig("planar.png")
+    pt.show()
 
     # unbatched rendering
     env.reset()

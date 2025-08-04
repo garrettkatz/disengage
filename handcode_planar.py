@@ -38,6 +38,9 @@ class Policy:
         angle = np.take_along_axis(angles, closest, axis=-1)
 
         action[...,2:] = angle
+        # print(action[...,2:].shape, angle.shape)
+        # print(angle)
+        # print(allies[...,2:])
 
         ## move in the opposite direction of adversary's field of view
         ## HACK! find closest here too
@@ -53,10 +56,13 @@ class Policy:
         angle = np.take_along_axis(angles, closest[...,None,:], axis=-2)[...,0,:]
         delta = np.take_along_axis(advr_90, closest[...,None], axis=-2)
         delta *= np.sign(angle[...,None])
+        delta -= np.take_along_axis(advr_cs, closest[...,None], axis=-2) # also move behind
         action[...,:2] = delta
 
         action = np.clip(action, -self.env.step_size, self.env.step_size)
-        return action        
+        # print(action)
+        # input('.]')
+        return action
 
 
 if __name__ == "__main__":
@@ -74,28 +80,50 @@ if __name__ == "__main__":
         view_angle=view_angle,
     )
 
+    # run policy until failure
     policy = Policy(env)
 
-    observation, info = env.reset()
+    observation, info = env.reset(upperhand=True)
     states = [env.state] # precompute intermediate states along plan
 
     import matplotlib.pyplot as pt
     _, render_ax = pt.subplots(1,1)
 
     rewards = []
-    for t in range(100):
+    for t in range(4096):
         env.render(render_ax, hang=False, msg = f"t={t}, r={env.reward_function(env.state)}")
-        action = policy(observation)[0]
+        action = policy(observation)
         observation, reward, _, _, _ = env.step(action)
         rewards.append(reward)
         states.append(env.state)
         pt.pause(0.01)
 
+        _, viz = env._team_reward(env.state.adversaries, env.state.allies)
+        if viz.any(axis=(-2,-1)): break
+
     print(f"mean reward = {np.mean(reward)} vs {env.get_max_reward()}")
 
+    # animate
+    yn = input("animate? y/n: ")
+    if yn == "y":
+        pt.close(pt.gcf())
+
+        import matplotlib.animation as animation
+
+        fig, axs = pt.subplots(1,1)
+        def drawframe(n):
+            states[n].render(axs)
+    
+        print("animating...")
+        anim = animation.FuncAnimation(fig, drawframe, frames=len(states), interval=50, blit=False, repeat=False)
+        print("saving...")
+        anim.save("hcp.mp4")
+        pt.close(fig)
+        print("done.")
+
     pt.figure()
-    pt.plot(np.arange(100), np.cumsum(rewards), 'b-')
-    pt.plot(np.arange(100), np.arange(100)*env.get_max_reward(), 'g--')
+    pt.plot(np.arange(len(rewards)), np.cumsum(rewards), 'b-')
+    pt.plot(np.arange(len(rewards)), np.arange(len(rewards))*env.get_max_reward(), 'g--')
     pt.show()
 
     # repeat 30 times for envelope comparison

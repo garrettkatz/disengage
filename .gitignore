@@ -3,4 +3,13 @@
 __pycache__
 *.mp4
 *.lprof
+*.eps
+*.png
+*.pdf
+*.aux
+*.log
+*.nav
+*.out
+*.snm
+*.toc
 

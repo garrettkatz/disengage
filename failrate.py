@@ -20,8 +20,8 @@ if __name__ == "__main__":
     view_angle = np.pi/16
     step_size = np.array([0.05, 0.05, .1]) # larger rotational motion
 
-    num_samples = 512 # number of samples for fitting each value function
-    num_timesteps = 10_000
+    num_samples = 1024 # number of samples for fitting each value function
+    num_timesteps = 4096
 
     # setup environment, policy, feature extractor
     env = PlanarEnv(
@@ -37,7 +37,7 @@ if __name__ == "__main__":
     if do_estimate:
 
         failure = np.empty((num_samples, num_timesteps), dtype=bool)
-        observation, _ = env.reset(batch_size=num_samples)
+        observation, _ = env.reset(batch_size=num_samples, upperhand=True)
         for t in range(num_timesteps):
             _, viz = env._team_reward(env.state.adversaries, env.state.allies)
             failure[:,t] = viz.any(axis=(-2,-1))
@@ -64,11 +64,13 @@ if __name__ == "__main__":
         print(failrate)
 
         import matplotlib.pyplot as pt
-        pt.plot(overrate, 'k-', label='over by t')
-        pt.plot(failrate, 'b--', label='fail at t')
-        pt.xlabel("timestep")
-        pt.ylabel("rate")
-        pt.legend()
 
-        pt.savefig("failrate.png")
+        pt.figure(figsize=(5,3), constrained_layout=True)
+        pt.plot(overrate, 'k-', label='failed by $t$')
+        # pt.plot(failrate, 'b--', label='fail at t')
+        pt.xlabel("Timestep $t$")
+        pt.ylabel("Estimate of $\\text{Pr}(F_{\\leq t})$")
+        # pt.legend()
+
+        pt.savefig("failrate.eps")
         pt.show()

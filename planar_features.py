@@ -53,7 +53,8 @@ class FeatureExtractor:
         if self.kernel == "quadratic":
             features = (features[:,:,None] * features[:,None,:]).reshape(len(allies),-1)
         elif self.kernel == "cubic":
-            features = (features[:,None,None] * features[None,:,None] * sorted_obs).flatten()
+            features = (features[:,:,None,None] * features[:,None,:,None] * features[:,None,None,:]).reshape(len(allies),-1)
+            # features = (features[:,None,None] * features[None,:,None] * sorted_obs).flatten()
 
         return features, allies_idx
 

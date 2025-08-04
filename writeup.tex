@@ -1,0 +1,152 @@
+\documentclass[12pt,letterpaper]{article}
+\usepackage{amssymb,graphics,amsfonts,amsmath,amsopn,amstext,amsfonts,amsthm}
+\usepackage{bbm}
+\usepackage{graphicx,epsfig,url,psfrag} %warmread,times}
+\usepackage{times}
+\usepackage{sidecap,wrapfig,array,tabularx}
+\usepackage{nicefrac}
+\usepackage{pifont}
+\usepackage[bb=dsserif]{mathalpha}
+
+\usepackage{parskip}
+
+% code listings and algos
+\usepackage{listings}
+\usepackage[usenames,dvipsnames]{xcolor}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+
+% Set Margins 
+\usepackage[left=1in,right=1in,top=1in,bottom=1in]{geometry}
+
+\usepackage{color}
+\usepackage{hyperref}
+\usepackage{soul}
+\usepackage{wrapfig}
+
+% theoretical results
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+
+
+\begin{document}
+
+Let $\pi$ denote the black-box policy operating in environment $\mathcal{E}$, modeled as a standard MDP.  We assume we are given some user-defined notion of ``failure,'' a binary predicate over states.  If a failure state is encountered, an episode ends immediately; otherwise it ends after $T$ steps.  We let $F_t$ denote the event that failure occurs at time $t$ and $F_{\geq t}$ denote the event that failure occurs at some time $t'\geq t$.  Since the horizon is finite, we let $\pi$ be a function of both current state and current time.
+
+Our goal is to anticipate likely failures before they occur so that we can disengage $\pi$ and transfer control to some other user-specified policy (e.g., human operator or counterfactual generator).  We model this with an augmented environment $\mathcal{E}'$, identical to $\mathcal{E}$ except with one additional ``disengage'' action.  If an episode has not yet failed at time $t$, the agent has the option to disengage at time $t$.  We will employ an augmented policy $\pi'$ defined as
+\begin{align}
+\pi'(s_t) = \begin{cases}
+\text{disengage} & \text{if } \mu_t(s_t) > \alpha_t \\
+\pi(s_t) & \text{otherwise,}
+\end{cases}
+\end{align}
+where $\mu_t$ is an auxiliary model trained to approximate $\text{Pr}(F_{\geq t}|s_t)$ and $\alpha_t$ is a threshold determined by conformal methods explained below.  Informally, if we have high confidence that the upcoming failure rate is below an acceptable level, we allow the black-box policy $\pi$ to operate normally. Otherwise, we disengage.
+
+We let $D_t'$ denote the event that $\pi'$ disengages at time $t$.  Since disengagement transfers control to some unknown policy, we model disengagement as terminating the episode but in a more acceptable manner than failure.  Similarly, we use $F_t'$ to denote the event of failure when using $\pi'$ in $\mathcal{E}'$, which has a different distribution than $F_t$ using the original policy and environment.  Note that in each time-step failure is checked before $\pi'$ can select an action, so $F_t'$ and $D_t'$ have an exclusive-or relationship.
+
+\textbf{Running Example:} Figure \ref{fig:planar} (left) depicts an idealized drone environment with multiple agents in continuous 2D space.  The goal of the green agents is to see, but not be seen, by the red agents.  Agent positions and headings are initialized uniformly at random at $t=0$ and controlled by their respective policies thereafter.  For sake of example we define ``failure'' as any state where a green agent lies in the field of view of a red agent.  The random initial state shown in the figure happens to be a failure state.
+
+Figure \ref{fig:planar} (right) estimates failure rates (marginalized over all $s_t$) using a batch of 1024 random episodes and a maximum duration $T=1024$.  Here, a heuristic hand-coded policy was used as the black-box controller for the green agents, whereas the red agents move randomly. Technically, the figure shows the probability of failing \textit{prior} to time $t$, which is not quite $1 - \text{Pr}(F_{\geq t})$ since there is also the possibility of reaching $T=512$ without failing at all.  The initial failure rate at $t=0$ is quite high because randomly initialized agent positions will frequently produce failure states right out the gate.  Failure rate increases more slowly as time goes on, meaning that the green agent policies do a fairly good job of staying out of sight as long as they are not unlucky in the random initialization.  The black-box policy is not optimal so it does tend to ``trip up'' eventually if one runs the episode indefinitely, but the mistakes become fewer and far between as time goes on.  At any rate, we use $T=1024$ here to ascertain the limiting behavior, but in the subsequent experiments we will use $T=200$.  We have intentionally used a sub-optimal black-box policy that makes mistakes, because we are interested in methods for anticipating mistakes.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[height=12em]{planar_fail.png}\hfill
+    \includegraphics[height=12em]{failrate_lower.eps}
+    \caption{\textbf{Left:} Random initial state of the planar environment.  Green dots are allies and red dots are adversaries.  Arrows indicate headings and whaded wedges indicate fields of view. \textbf{Right:} Proportion of 1024 random episodes that have failed by time $t$, as a function of $t$.}
+    \label{fig:planar}
+\end{figure}
+
+It doesn't make so much sense to start an episode in a failure situation, so we modified the random initialization in a way that will never fail at $t=0$.  See \texttt{hcp.mp4} for an example episode in this modified version.  Fail rate steadily increases and saturates although typically the agent can last several hundred steps before failure (Figure \ref{fig:planar_upper}).
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[height=12em]{planar_upper.png}\hfill
+    \includegraphics[height=12em]{failrate_upper.eps}
+    \caption{Same as Fig.\@ \ref{fig:planar} but with random initialization that avoids failure at $t=0$.}
+    \label{fig:planar_upper}
+\end{figure}
+
+\textbf{First Challenge: Estimated Labels}
+
+Unlike typical conformal regression we don't know the true failure rate at a given state; we have to estimate it with Monte-Carlo rollouts.  This introduces additional noise and uncertainty into the process.  If the variance across states of the empirical failure rates is on the same order of magnitude as the noise in the estimates, then a state-conditioned regression will be too noisy to be useful.
+
+Figure \ref{fig:failest} illustrates the challenge when estimating the failure rate of random initial states.  One way to quantify uncertainty in a Monte-Carlo estimate is Hoeffding's inequality.  However, this inequality appears to be too loose, especially when the failure rate is close to zero, since two independent estimates are very similar (near zero) relative to the size of the confidence interval.  This motivates us to look for tighter bounds.  That said, we do observe a small portion of initial states where the estimated failure rate is high (``high-failure regime''), and Hoeffding's inequality can give us high confidence that the these states have higher true failure rate than the majority of states in the near-zero regime.  A well-trained regressor should be able to distinguish these two regimes with high confidence.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\linewidth]{fsr_labels.eps}
+    \caption{\textbf{Left:} Estimated failure rates for 256 random initial states and up to 100 timesteps.  Solid line shows the estimate, grey envelope shows the 95\% Hoeffding confidence intervals with 4096 rollouts. Blue and red dots indicate estimates using two disjoint halves of the rollouts.  The horizontal axis uses an exponential scale for better visualization of high-failure regime.}
+    \label{fig:failest}
+\end{figure}
+
+\textbf{Second Challenge: Well-trained Regressors}
+
+The regressor needs to be accurate, or else its confidence intervals will be too large to be useful.
+
+\textbf{Problem Statement}
+
+The event we want to avoid is $F'_0 \vee F'_1 \vee ... \vee F'_T$.  With a conformal approach, we aim to bound the probability of this event below a user-specified threshold $\delta$:
+\begin{align}
+\text{Pr}\left(\bigvee_{t=0}^T F'_t\right) \overset{?}{\leq} \delta\label{eq:problem}
+\end{align}
+The probability above and those in the following are taken with respect to the randomness of the environment as well as the random samples of data used to train each $\mu_t$ and calibrate each $\alpha_t$.
+
+Each $F'_t$ in (\ref{eq:problem}) is a mutually exclusive event, since failure at $t$ will terminate the episode before any subsequent time-steps.  Therefore we have:
+\begin{align}
+\text{Pr}\left(\bigvee_{t=0}^T F'_t\right) = \sum_{t=0}^T \text{Pr}(F'_t) \overset{?}{\leq} \delta
+\end{align}
+Failure at $t$ entails that time $t$ was reached, meaning that $\pi'$ did not disengage or fail prior to $t$.  Therefore, letting $C'_t$ abbreviate the event $\neg D'_t\wedge\neg F'_t$, we have:
+\begin{align}
+\sum_{t=0}^T \text{Pr}(F'_t) = \sum_{t=0}^T \text{Pr}(F'_t \wedge  C'_{t-1}\wedge ... \wedge C'_0) \overset{?}{\leq} \delta\label{eq:sum}
+\end{align}
+A sufficient condition for the inequality in (\ref{eq:sum}) is that each summand be upper bounded by $\delta/(T+1)$.  By the chain rule of probability, we can expand each summand as follows:
+\begin{align}
+&\text{Pr}(F'_t \wedge  C'_{t-1}\wedge ... \wedge C'_0) = \\
+& \underbrace{\text{Pr}(F'_t |  C'_{t-1}\wedge ... \wedge C'_0)}_{\textcircled{1}} \cdot \underbrace{\text{Pr}(\neg D'_{t-1}| \neg F'_{t-1}\wedge  C'_{t-2}\wedge ... \wedge C'_0)}_{\textcircled{2}} \cdot \underbrace{\text{Pr}(\neg F'_{t-1}\wedge  C'_{t-2}\wedge ... \wedge C'_0)}_{\textcircled{3}}
+\end{align}
+We will now bound each summand by considering two cases.  For the first case, suppose $\textcircled{1}\leq\delta/T$. Then since $\textcircled{2}$ and $\textcircled{3}$ are both less than 1, we have
+\begin{align}
+&\text{Pr}(F'_t \wedge  C'_{t-1}\wedge ... \wedge C'_0) \leq \delta/T.\label{eq:lessdelta}
+\end{align}
+For the second case, suppose $\textcircled{1}>\delta/T$; we will show that (\ref{eq:lessdelta}) still holds.  In this case, using the definition of $\pi'$, we can rewrite $\textcircled{2}$ as 
+\begin{align}
+\text{Pr}(\neg D'_{t-1}| \neg F'_{t-1}\wedge  C'_{t-2}\wedge ... \wedge C'_0) = \text{Pr}(\mu_{t-1}(s_{t-1}) \leq \alpha_{t-1}| \neg F'_{t-1}\wedge  C'_{t-2}\wedge ... \wedge C'_0)\label{eq:dis}
+\end{align}
+We will use a variation on conformal regression to prescribe the threshold $\alpha_{t-1}$ which guarantees that the right-hand side of (\ref{eq:dis}) is less than $\delta/T$.
+
+The variation proceeds as follows.  We compute each $\mu_t$ and $\alpha_t$ in order of increasing $t$.  For the current $t$, we sample regression and calibration data by drawing states $s_t$ from the distribution $\text{Pr}(s_t | \neg F'_t\wedge  C'_{t-1}\wedge ... \wedge C'_0)$ by rejection sampling, i.e., sampling fresh trajectories and discarding those that terminate prior to time $t$ or fail at $t$.  In the following we will let $\text{Pr}_t(\cdot)$ abbreviate the conditional probability $\text{Pr}(\cdot|\neg F'_t\wedge  C'_{t-1}\wedge ... \wedge C'_0)$.
+
+To train $\mu_t$, we collect a batch of rollouts from each $s_t$ with the original policy $\pi$ and environment $\mathcal{E}$.  The proportion $\hat{y}$ of rollouts that fail is a Monte-Carlo estimate of the true failure rate $y = \text{Pr}(F_{\geq t}|s_t)$, which is a constant from the perspective of the conformal method (it depends only on $\mathcal{E}$ and $\pi$, not on any sampled training/calibration data).  This estimate $\hat{y}$ will be used as a target label for the regression.  However, since it is only an estimate, it introduces an additional source of uncertainty, which we bound with Hoeffding's inequality:
+\begin{align}
+\text{Pr}_t(|\hat{y} - y| \geq \beta_t) \leq \epsilon_t,
+\end{align}
+where $\epsilon_t = 2\cdot\text{exp}\left\{ -2R_t\beta_t^2 \right\}$, $R_t$ is the number of rollouts, and $\beta_t$ is a free parameter that we will carefully select in the following.  We have applied Hoeffding's inequality to indicator variables of failure and used the fact that they are in the range $[0,1]$.  Note that the bound can be controlled by making $R$ sufficiently large and is independent of $s_t$.
+
+To calibrate $\mu_t$ and $\alpha_t$, we sample fresh states $s_t$ and target labels $\hat{y}$ in the same manner from $\text{Pr}_t(\cdot)$.  Standard conformal regression results tell us that
+\begin{align}
+\text{Pr}_t(\hat{y} - \mu_t(s_t) > x_t) \leq \gamma_t,
+\end{align}
+when we set $x_t$ to the $\lceil(n+1)(1-\gamma_t)\rceil^\text{th}$ smallest value in the set of $\hat{y} - \mu_t(s_t)$ values across the calibration data.  Here $\gamma_t$ is also a carefully selected free parameter.
+
+Now we will combine these bounds to show that (\ref{eq:dis}) is at most $\delta/(T+1)$. Suppose at deployment time we encounter a fresh ``test'' sample $s_t \sim \text{Pr}_t$ with true failure rate $y$ and evaluate $\mu_t(s_t)$.  We will not actually estimate $\hat{y}$ during deployment, but if we did, we would have
+\begin{align}
+y - \mu = y- \hat{y} + \hat{y} - \mu \leq |y - \hat{y}| + \hat{y} - \mu.
+\end{align}
+Therefore $\hat{y}-\mu \leq x_t$ and $|y - \hat{y}| \leq \beta_t$ entail $y - \mu \leq x_t + \beta_t$.  By contrapositive,
+\begin{align}
+y - \mu > x_t + \beta_t &\Rightarrow (\hat{y}-\mu > x_t) \vee (|y - \hat{y}| > \beta_t) \\
+\text{Pr}_t(y - \mu > x_t + \beta_t) &\leq \text{Pr}_t\left((\hat{y}-\mu > x_t) \vee (|y - \hat{y}| > \beta_t)\right)
+\end{align}
+since any event is no more likely than other events it entails.  Next using a union bound we have
+\begin{align}
+\text{Pr}_t(y - \mu > x_t + \beta_t) &\leq \text{Pr}_t(\hat{y}-\mu > x_t) + \text{Pr}_t(|y - \hat{y}| > \beta_t) \leq \gamma_t + \epsilon_t.
+\end{align}
+Now we will relate $y$ to $\delta/(T+1)$.  We have assumed 
+
+The event $y - \mu > x_t + \beta_t$ is equivalent to $\mu < y - (x_t + \beta_t)$, which is precisely $\neg D_t$ if we set $\alpha_t = y - (x_t$
+
+
+\end{document}
+
