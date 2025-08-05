@@ -16,9 +16,9 @@ if __name__ == "__main__":
 
     do_rollouts = False
     do_train = False
-    do_cal = False
-    do_deploy = False
-    do_reps = False
+    do_cal = True
+    do_deploy = True
+    do_reps = True
     do_show = True
 
     # setup experiment parameters
@@ -58,7 +58,7 @@ if __name__ == "__main__":
     hoeffding = np.sqrt(np.log(confidence/2) / (-2*num_rollouts))
 
 
-    taus, deltas, thresholds, failrates, disrates, catrates, cathoeffs = [], [], [], [], [], [], []
+    taus, deltas, thresholds, failrates, disrates, catrates, cathoeffs, marginals = [], [], [], [], [], [], [], []
     start_time = perf_counter()
     for rep in range(num_reps if do_reps else 0):
 
@@ -115,13 +115,13 @@ if __name__ == "__main__":
             quant = 1 - np.arange(len(calib))/(len(calib)+1)
     
             opt = np.argmin(quant + calib)
-            if do_show:
-                pt.plot(quant, calib, 'k.-', label="threshold")
-                pt.plot(quant, quant+calib, 'b.-', label="threshold + prob")
-                pt.xlabel("Pr(error > threshold)")
-                pt.ylabel("error threshold")
-                pt.legend()
-                pt.show()
+            # if do_show:
+            #     pt.plot(quant, calib, 'k.-', label="threshold")
+            #     pt.plot(quant, quant+calib, 'b.-', label="threshold + prob")
+            #     pt.xlabel("Pr(error > threshold)")
+            #     pt.ylabel("error threshold")
+            #     pt.legend()
+            #     pt.show()
 
             threshold = calib[opt]
             delta = quant[opt]
@@ -159,14 +159,15 @@ if __name__ == "__main__":
             # catrates.append((~disengage & catastrophe).sum() / num_deployments)
             catrates.append((~disengage & catastrophe).mean())
             cathoeffs.append(deploy_hoeffding)
+            marginals.append(~disengage[0] & catastrophe[0])
 
         print(f"rep {rep} done after {perf_counter()-start_time:.3f}s")
 
         with open(f"fsr_results.pkl", "wb") as f:
-            pk.dump((taus, deltas, thresholds, failrates, disrates, catrates, cathoeffs), f)
+            pk.dump((taus, deltas, thresholds, failrates, disrates, catrates, cathoeffs, marginals), f)
     
     with open(f"fsr_results.pkl", "rb") as f:
-        (taus, deltas, thresholds, failrates, disrates, catrates, cathoeffs) = pk.load(f)
+        (taus, deltas, thresholds, failrates, disrates, catrates, cathoeffs, marginals) = pk.load(f)
 
     with open(f"fsr_train_0.pkl", "rb") as f:
         (init_states, failures, regressor, predictions, errors) = pk.load(f)
@@ -178,6 +179,8 @@ if __name__ == "__main__":
     print(np.array(cathoeffs))
     print(np.array(catrates) + np.array(cathoeffs))
     print(f"vs acceptable = {acceptable}")
+
+    print(f"marginal fail prob = {np.mean(marginals)}")
 
     if do_show:
 
@@ -196,6 +199,23 @@ if __name__ == "__main__":
         pt.title(f"$h_0^* + \\alpha_0^* = {calib[opt]:.3f} + {quant[opt]:.3f} = {calib[opt] + quant[opt]:.3f}$")
         pt.legend()
         pt.savefig("calib.eps")
+        pt.show()
+
+
+        sorter = np.argsort(catrates)
+        catrates = np.array(catrates)[sorter]
+        cathoeffs = np.array(cathoeffs)[sorter]
+        disrates = np.array(disrates)[sorter]
+
+        pt.figure(figsize=(10,4), constrained_layout=True)
+        pt.bar(np.arange(num_reps), catrates, color='k', label='$\\neg D_0 \wedge F_{>0}$')
+        pt.bar(np.arange(num_reps), cathoeffs, bottom=catrates, color='r', label='$\\neg D_0 \wedge F_{>0}$ + .999 confidence interval')
+        pt.bar(np.arange(num_reps), disrates, bottom=catrates+cathoeffs, color='b', label='$D_0$')
+        pt.plot([0, num_reps], [acceptable]*2, 'k--', label='$\delta$')
+        pt.legend(loc="upper right", framealpha=1)
+        pt.xlabel("Sorted repetitions")
+        pt.ylabel("Error Rates")
+        pt.savefig("rep_results.eps")
         pt.show()
 
         # # sort by estimated failure rate

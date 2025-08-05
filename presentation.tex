@@ -51,7 +51,7 @@
 \frametitle{Scope and Challenges}
 \begin{enumerate}
 \item Model-agnostic \pause
-\item Sequential decision making \pause
+\item Sequential decision-making \pause
 \item Multi-agent teams \pause
 \item Contested environments
     \begin{itemize}
@@ -69,7 +69,7 @@
 \frametitle{Current Focus}
 \begin{enumerate}
 \item \textbf{Model-agnostic}
-\item \textbf{Sequential decision making}
+\item \textbf{Sequential decision-making}
 \item Multi-agent teams*
 \item Contested environments
     \begin{itemize}
@@ -124,7 +124,7 @@
 \end{frame}
 
 \begin{frame}
-    \frametitle{Black-box Agents for Planar Environment}
+    \frametitle{Black-Box Agents for Planar Environment}
     \begin{center}
     \includegraphics[width=\linewidth]{bb_perf.png}    
     \end{center}
@@ -219,7 +219,7 @@
 
     \end{center}
 
-        \textbf{Left:} Random initial state of the planar environment.  Green dots are allies and red dots are adversaries.  Arrows indicate headings and whaded wedges indicate fields of view. \textbf{Right:} Proportion of 1024 random episodes that have failed by time $t$, as a function of $t$.
+        \textbf{Left:} Random initial state of the planar environment.  Green dots are allies and red dots are adversaries.  Arrows indicate headings and shaded wedges indicate fields of view. \textbf{Right:} Proportion of 1024 random episodes that have failed by time $t$, as a function of $t$.  ``Failure'' means that any green agent is in a red agent's field of view.
 
 
 \end{frame}
@@ -240,6 +240,13 @@
             \item Alternative courses of action when mistakes are anticipated
             \item Post-hoc counterfactual analysis after deployment \cite{stepin2021survey}
         \end{itemize}
+
+    \end{itemize}
+
+    Related work on conformal methods for sequential decision making:
+    \begin{itemize}
+    \item \cite{dietterich2022conformal} provide per-timestep confidence intervals on rewards
+    \item \cite{lekeufack2024conformal} work with sequential decision making but assume access to a ``conservative'' policy guaranteed to avoid failure 
     \end{itemize}
 
 \end{frame}
@@ -247,7 +254,7 @@
 \begin{frame}
     \frametitle{Background on Conformal Regression \cite{lei2018distribution}}
 
-    Procedure, given an acceptable error probability $\delta$:
+    Procedure, given an acceptable error probability $\alpha$:
     \begin{enumerate}
     \item Train a regression model $\mu: \mathcal{X} \rightarrow \mathcal{Y}$
     \item Collect fresh i.i.d. ``calibration samples'' $(x_1, y_1), ..., (x_n, y_n) \sim \mathcal{D}$
@@ -264,7 +271,7 @@
 
     \item \textit{Main technical assumption:} The samples are exchangeable (entailed by i.i.d.)
 
-    \item \textit{``Marginal'' property:} Probability is taken over all realizations of the calibration data 
+    \item \textit{``Marginal'' property:} Probability is taken over all realizations of the sample data 
    \end{itemize}
 
 \end{frame}
@@ -434,7 +441,7 @@
     
     %% \vspace{1em}
     
-    \item If you want $\leq \alpha = 25\%$ chance of large error, set $d = 92.3$, which is the
+    \item If you want $\leq \alpha = 25\%$ chance of large error, set $h = 92.3$, which is the
     \begin{align*}
     \lceil (n+1)(1-\alpha)\rceil^\text{th} = \lceil 5\times 0.75\rceil^\text{th} = \lceil 3.75\rceil^\text{th} = 4^\text{th}
     \end{align*}
@@ -447,8 +454,9 @@
 
 \end{frame}
 
+
 \begin{frame}
-    \frametitle{Pros/cons of conformal methods for us}
+    \frametitle{Pros/Cons of Conformal Methods for Us}
     \begin{itemize}
     \item Pros:
         \begin{itemize}
@@ -458,7 +466,7 @@
         \end{itemize}
     \item Cons:
         \begin{itemize}
-        \item Supervised learning paradigm, not sequential decision making
+        \item Mainly for supervised learning, not sequential decision making
         \item The probability we need to bound is
             \begin{align*}
             \text{Pr}(\bigvee_t F'_t) \leq \delta, \quad \text{ [episode failure] }
@@ -500,7 +508,7 @@
 \end{frame}
 
 \begin{frame}
-    \frametitle{Initial results at $t=0$ (``Go/No-Go'')}
+    \frametitle{Initial Results at $t=0$ (``Go/No-Go'')}
 
     \begin{center}
         \includegraphics[width=\linewidth]{fsr_labels.eps}
@@ -515,10 +523,11 @@
 \end{frame}
 
 \begin{frame}
-    \frametitle{Initial results at $t=0$ (``Go/No-Go'')}
+    \frametitle{Initial Results at $t=0$ (``Go/No-Go'')}
 
     \begin{center}
-        \includegraphics[width=\linewidth]{fsr_fit.eps}
+        %% \includegraphics[width=\linewidth]{fsr_fit.eps}
+        \includegraphics[width=\linewidth]{fsr_fit.png}
     \end{center}
     Same as previous figure except
     \begin{itemize}
@@ -530,9 +539,9 @@
 \end{frame}
 
 \begin{frame}
-    \frametitle{Initial results at $t=0$ (``Go/No-Go'')}
+    \frametitle{Initial Results at $t=0$ (``Go/No-Go'')}
 
-    Partial theoretical result for $t=0$
+    How to choose $\tau_t$? Partial theoretical result for $t=0$
 
     \vspace{1em}
 
@@ -556,7 +565,7 @@
 \end{frame}
 
 \begin{frame}
-    \frametitle{Example $\tau_0$ selection}
+    \frametitle{Example $\tau_0$ Selection}
 
     \begin{center}
         \includegraphics[width=\linewidth]{calib_opt.eps}
@@ -567,20 +576,223 @@
 \end{frame}
 
 \begin{frame}
-    \frametitle{Empirical failure rates}
+    \frametitle{Empirical Failure Rates}
 
     \begin{center}
-        \includegraphics[width=\linewidth]{}
+        \includegraphics[width=\linewidth]{rep_results_10K.eps}
     \end{center}
 
-    Stacked bar chart of false positive (disengage rate) and false negative (continue and fail rate) probs
-    State in text marginal fail rate (using first rollout from each repetition)
+    \begin{itemize}
+    \item 100 repetitions of the entire process from scratch
+    \item In each repetition, 10K ``deployments'' with $\pi'$ to estimate:
+        \begin{itemize}
+        \item $\text{Pr}(\neg D_0 \wedge F_{>0})$ [Does not disengage and then fails]
+            %% \begin{itemize}
+            %%     \item 99.9\% confidence interval with Hoeffding inequality
+            %% \end{itemize}
+        \item $\text{Pr}(D_0)$ [Disengages]
+        \end{itemize}
+    \item Marginal failure rate over repetitions (using one deployment from each): 0.02
+    \end{itemize}
 
 \end{frame}
 
+\begin{frame}
+    \frametitle{Proof Sketch of Partial Theoretical Result}
+
+    Given: $\text{Pr}(|\mu_0(s_0) - y| > h_0) \leq \alpha_0$ and $D'_0 \Leftrightarrow \mu_0(s_0) > \tau_0$.
+
+    To show: $\text{Pr}(F'_{>0}) \overset{?}{\leq} h_0 + \alpha_0 + \tau_0$
+
+    \vspace{.5em}
+
+    Key ideas:
+    \begin{itemize}
+    \item Failure entails that $\pi$ did not disengage
+    \item Expand marginal probability over states
+    \item Split into cases whether $|\mu - y|>h$
+    \end{itemize}
+
+
+\end{frame}
 
 \begin{frame}
-    \frametitle{Theoretical Puzzle Pieces}
+    \frametitle{Proof Sketch of Partial Theoretical Result}
+
+    Given: $\text{Pr}(|\mu_0(s_0) - y| > h_0) \leq \alpha_0$ and $D'_0 \Leftrightarrow \mu_0(s_0) > \tau_0$.
+
+    To show: $\text{Pr}(F'_{>0}) \overset{?}{\leq} h_0 + \alpha_0 + \tau_0$
+
+    \vspace{.5em}
+
+    Key ideas:
+    \begin{itemize}
+    \item \textbf{Failure entails that $\pi$ did not disengage}
+    \item Expand marginal probability over states
+    \item Split into cases whether $|\mu - y|>h$
+    \end{itemize}
+
+    Failure entails engagement:
+    \begin{align*}
+    \text{Pr}(F'_{>0})  = \text{Pr}(F'_{>0} \wedge \neg D'_0) = \text{Pr}(F'_{>0} \wedge \mu_0(s_0) \leq \tau_0)
+    \end{align*}
+
+\end{frame}
+
+\begin{frame}
+    \frametitle{Proof Sketch of Partial Theoretical Result}
+
+    Given: $\text{Pr}(|\mu_0(s_0) - y| > h_0) \leq \alpha_0$ and $D'_0 \Leftrightarrow \mu_0(s_0) > \tau_0$.
+
+    To show: $\text{Pr}(F'_{>0}) \overset{?}{\leq} h_0 + \alpha_0 + \tau_0$
+
+    \vspace{.5em}
+
+    Key ideas:
+    \begin{itemize}
+    \item Failure entails that $\pi$ did not disengage
+    \item \textbf{Expand marginal probability over states}
+    \item Split into cases whether $|\mu - y|>h$
+    \end{itemize}
+
+    Expand marginal probability:
+    \begin{align*}
+    \text{Pr}(F'_{>0} \wedge \mu_0(s_0) \leq \tau_0)
+         &= \int_{s_0}\text{Pr}(F'_{>0} \wedge \mu_0(s_0) \leq \tau_0|s_0)d\rho(s_0) \\
+         &= \int_{\mu \leq \tau}\text{Pr}(F'_{>0}|s_0)d\rho(s_0) = \int_{\mu \leq \tau}y\, d\rho(s_0)
+    \end{align*}
+
+\end{frame}
+
+\begin{frame}
+    \frametitle{Proof Sketch of Partial Theoretical Result}
+
+    Given: $\text{Pr}(|\mu_0(s_0) - y| > h_0) \leq \alpha_0$ and $D'_0 \Leftrightarrow \mu_0(s_0) > \tau_0$.
+
+    To show: $\text{Pr}(F'_{>0}) \overset{?}{\leq} h_0 + \alpha_0 + \tau_0$
+
+    \vspace{.5em}
+
+    Key ideas:
+    \begin{itemize}
+    \item Failure entails that $\pi$ did not disengage
+    \item Expand marginal probability over states
+    \item \textbf{Split into cases whether $|\mu - y|>h$}
+    \end{itemize}
+
+    \begin{align*}
+    \int_{\mu \leq \tau}y\, d\rho(s_0)
+        &= \int_{\mu \leq \tau, |\mu-y|>h} y\, d\rho(s_0) + \int_{\mu \leq \tau, |\mu-y|\leq h} y\, d\rho(s_0) \\
+        &\leq \int_{|\mu-y|>h}d\rho(s_0) + \int_{\mu \leq \tau, |\mu-y|\leq h} (\tau_0+h_0)\, d\rho(s_0) \\
+        &\leq \alpha_0 + (\tau_0+h_0)
+    \end{align*}
+
+\end{frame}
+
+\begin{frame}
+    \frametitle{Unfinished Business}
+
+    Theoretical:
+    \begin{itemize}
+    \item Combine with uncertainty bounds on Monte-Carlo estimate $\hat{y}$
+    \item Disengaging mid-way through episode, beyond $t=0$
+    \item More care with respect to the ``marginal'' property of conformal methods
+    \end{itemize}
+
+    Practical:
+    \begin{itemize}
+    \item Full implementation/evaluation on other environments
+    \item Remaining ``Scope and Challenges''
+        \begin{itemize}
+        \item \textbf{Counterfactual/alternative courses of action}
+        \end{itemize}
+    \end{itemize}
+
+\end{frame}
+
+\begin{frame}
+    \frametitle{Monte-Carlo Counterfactual Sampling}
+    \begin{itemize}
+    \item ``Counterfactual courses of action:'' If alternative actions had been selected, higher reward would have been received
+    \item Useful for:
+        \begin{itemize}
+        \item Automatic interventions when mistakes are anticipated (during deployment)
+        \item Post-hoc human analysis after mistakes occurred (after deployment)
+        \end{itemize}
+    \item Objective: Alternative policy $\hat{\pi}$ with better performance than $\pi$ starting from a particular state $\hat{s}$
+        \begin{itemize}
+        \item $\hat{s}$ is where a mistake was anticipated or occurred (e.g., $\mu(\hat{s}) > \tau$)
+        \item Not over all $s$; that would be as hard as training $\pi$
+        \end{itemize}
+    
+    \end{itemize}
+
+\end{frame}
+
+\begin{frame}
+    \frametitle{Current solution}
+    \begin{itemize}
+    \item Sample an alternative action $\hat{a}$ at current state $\hat{s}$ where a mistake is expected
+    \item Enforce that $\hat{\pi}:\mathcal{S}\rightarrow\mathcal{A}$ is a function of state
+        \begin{itemize}
+        \item Any state near $\hat{s}$ should produce an action near $\hat{a}$
+        \end{itemize}
+    \item Formally:
+        \begin{itemize}
+        \item $\hat{\pi}(s) = \eta(s)\cdot\hat{a} + (1 - \eta(s))\cdot\pi(s)$, where
+        \item $\eta(s) = \text{exp}\{-\sigma\cdot||s - \hat{s}||^2\}$
+        \item $\hat{a} \sim$ uniform over $\mathcal{A}$
+        \item $\sigma\sim$ standard exponential distribution
+        \end{itemize}
+    \item Repeatedly sample candidates for $\hat{\pi}$ in this way to find one that outperforms the black box at $\hat{s}$
+    
+    \end{itemize}
+
+\end{frame}
+
+\begin{frame}
+    \frametitle{Evaluation in Planar Environment}
+
+    \begin{center}
+        \includegraphics[width=\linewidth]{counterfac.png}
+    \end{center}
+
+    \begin{itemize}
+    \item 5K repetitions of experiment, each with randomly sampled $\hat{s}$
+        \begin{itemize}
+        \item Skip all but the lowest-performing ones (1.5\%)
+        \item Evaluate average return of $\pi$ on 30 rollouts from $\hat{s}$
+        \end{itemize}
+    \item In each repetition, 100 randomly sampled $\hat{a}$ and $\hat{\pi}$
+    \item For each $\hat{\pi}$, evaluate performance on 30 more rollouts
+    \item Compare $\hat{\pi}$ with $\pi$ using Walsh's t-test on their respective rollout samples
+    \item Holm-Šidák false discovery correction over the 100 t-tests
+    \end{itemize}
+
+\end{frame}
+
+\begin{frame}
+    \frametitle{Conclusions and Future Work}
+    \begin{itemize}
+    \item We have a core framework in place for model-agnostic mitigation of AI mistakes in autonomous systems
+        \begin{itemize}
+        \item Combines conformal uncertainty quantification and Monte-Carlo sampling
+        \item Implementations and theoretical analyses are complete for some parts of the framework but in progress for others
+        \end{itemize}
+    \item Next steps
+        \begin{itemize}
+        \item Finish implementation and derivation for entire pipeline
+        \item Evaluate with more environments (AirSim and other RL benchmarks)
+        \end{itemize}
+    \item Directions for improvement
+        \begin{itemize}
+        \item Tighter bounds and confidence intervals
+        \item Tackle contested environments (out-of-distribution samples, etc.)
+        \item More sophisticated and general counterfactual sampling
+        \end{itemize}
+    \item Questions?
+    \end{itemize}
+
 \end{frame}
 
 \begin{frame}[allowframebreaks]
