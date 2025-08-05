@@ -19,7 +19,7 @@ if __name__ == "__main__":
     do_cal = False
     do_deploy = False
     do_reps = False
-    do_show = False
+    do_show = True
 
     # setup experiment parameters
     num_allies = 2
@@ -27,7 +27,7 @@ if __name__ == "__main__":
     view_angle = np.pi/16
     step_size = np.array([0.05, 0.05, .1]) # larger rotational motion
 
-    num_reps = 10
+    num_reps = 100
     num_timesteps = 100
     num_samples = 4096 # number of samples for fitting regressor and calibration
     num_rollouts = 256 # number of rollouts to estimate state-conditioned failure rate
@@ -181,43 +181,60 @@ if __name__ == "__main__":
 
     if do_show:
 
-        # sort by estimated failure rate
-        failure_rates = failures.mean(axis=1)
-        idx = np.argsort(failure_rates)
+        # sample tau selection
+        calib = errors[num_train:]
+        calib = np.sort(calib)
+        quant = 1 - np.arange(len(calib))/(len(calib)+1)
+        opt = np.argmin(quant + calib)
 
-        # empirical discrepancy between two independent rollout samples (split the big sample)
-        failure_rates_A = failures[:,:num_rollouts//2].mean(axis=1)
-        failure_rates_B = failures[:,num_rollouts//2:].mean(axis=1)
-
-        pt.figure(figsize=(12,4), constrained_layout=True)
-
-        # x = 1.01**np.arange(num_samples)
-        x = np.arange(num_samples)
-
-        ylo = failure_rates - hoeffding
-        yhi = failure_rates + hoeffding
-        pt.fill_between(x, ylo[idx], yhi[idx], color=(.75,)*3)
-
-        pt.plot(x, failure_rates_A[idx], 'b.', label="Subsample A")
-        pt.plot(x, failure_rates_B[idx], 'r.', label="Subsample B")
-        pt.plot(x, predictions[idx], 'g.-', label="predictions")
-        pt.plot(x, failure_rates[idx], 'k-', label="Estimated failure rate")
-        pt.xlabel("Ordered initial state samples")
-        pt.ylabel("Estimate of $\\text{Pr}(F_{\\geq 1})$")
-
-        # pt.xticks(x[::10], np.arange(0,num_samples,10))
-        # pt.xscale("function", functions=(lambda x: 1.01**x, lambda x: np.log(x)/np.log(1.01)))
-
-        # pt.ylim([.2, .38])
-
-        # pt.figure(figsize=(5,3), constrained_layout=True)
-        # pt.plot(overrate, 'k-', label='failed by $t$')
-        # # pt.plot(failrate, 'b--', label='fail at t')
-        # pt.xlabel("Timestep $t$")
-        # pt.ylabel("Estimate of $\\text{Pr}(F_{\\leq t})$")
-        # pt.legend()
-
-        pt.savefig("fsr.eps")
+        pt.figure(figsize=(6,3), constrained_layout=True)
+        pt.plot(quant, calib, 'r-', label="$h_0$")
+        pt.plot(quant, quant+calib, 'b-', label="$h_0 + \\alpha_0$") # 
+        pt.plot(quant, np.full(len(quant), quant[opt]+calib[opt]), 'k--', label="$\\delta - \\tau_0$") # 
+        pt.xlabel("Quantile")
+        pt.ylabel("Thresholds")
+        pt.title(f"$h_0^* + \\alpha_0^* = {calib[opt]:.3f} + {quant[opt]:.3f} = {calib[opt] + quant[opt]:.3f}$")
+        pt.legend()
+        pt.savefig("calib.eps")
         pt.show()
+
+        # # sort by estimated failure rate
+        # failure_rates = failures.mean(axis=1)
+        # idx = np.argsort(failure_rates)
+
+        # # empirical discrepancy between two independent rollout samples (split the big sample)
+        # failure_rates_A = failures[:,:num_rollouts//2].mean(axis=1)
+        # failure_rates_B = failures[:,num_rollouts//2:].mean(axis=1)
+
+        # pt.figure(figsize=(12,4), constrained_layout=True)
+
+        # # x = 1.01**np.arange(num_samples)
+        # x = np.arange(num_samples)
+
+        # ylo = failure_rates - hoeffding
+        # yhi = failure_rates + hoeffding
+        # pt.fill_between(x, ylo[idx], yhi[idx], color=(.75,)*3)
+
+        # pt.plot(x, failure_rates_A[idx], 'b.', label="Subsample A")
+        # pt.plot(x, failure_rates_B[idx], 'r.', label="Subsample B")
+        # pt.plot(x, predictions[idx], 'g.-', label="predictions")
+        # pt.plot(x, failure_rates[idx], 'k-', label="Estimated failure rate")
+        # pt.xlabel("Ordered initial state samples")
+        # pt.ylabel("Estimate of $\\text{Pr}(F_{\\geq 1})$")
+
+        # # pt.xticks(x[::10], np.arange(0,num_samples,10))
+        # # pt.xscale("function", functions=(lambda x: 1.01**x, lambda x: np.log(x)/np.log(1.01)))
+
+        # # pt.ylim([.2, .38])
+
+        # # pt.figure(figsize=(5,3), constrained_layout=True)
+        # # pt.plot(overrate, 'k-', label='failed by $t$')
+        # # # pt.plot(failrate, 'b--', label='fail at t')
+        # # pt.xlabel("Timestep $t$")
+        # # pt.ylabel("Estimate of $\\text{Pr}(F_{\\leq t})$")
+        # # pt.legend()
+
+        # pt.savefig("fsr.eps")
+        # pt.show()
 
 

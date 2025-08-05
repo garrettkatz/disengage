@@ -1,13 +1,22 @@
 % Quick start guide
-\documentclass{beamer}
+\documentclass[handout]{beamer}
+
+\usepackage{hyperref}
 
 \usetheme {default}
 
+\addtobeamertemplate{navigation symbols}{}{%
+    \usebeamerfont{footline}%
+    \usebeamercolor[fg]{footline}%
+    \hspace{1em}%
+    \insertframenumber/\inserttotalframenumber
+}
+
 % Title page details
-\title {Model-Agnostic Error Mitigation in \\ Autonomous Systems}
+\title {Mitigating AI Mistakes in Sequential Decision-Making with Model-Agnostic Conformal Uncertainty Quantification}
 \subtitle{}
 \author{Garrett E. Katz}
-\institute{Syracuse University}
+\institute{Associate Professor, EECS, Syracuse University}
 %% \date{\today}
 \date{}
 
@@ -19,6 +28,565 @@
 \begin{frame}
 % Print the title page as the first slide
 \titlepage
+
+{\centering\footnotesize In collaboration with Adebayo Braimah (Stonybrook) and Simon Khan (AFRL)}
+
+\end{frame}
+
+\begin{frame}
+\frametitle{Motivation}
+\begin{itemize}
+\item No AI system is perfect; mistakes will happen
+\item Mistakes can be costly, especially in autonomous systems
+\item We want to:
+    \begin{enumerate}
+    \item Quantify uncertainty about the AI's performance
+    \item Intervene when the risk of a mistake is too high
+    \item Debug the mistake before next time
+    \end{enumerate}
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Scope and Challenges}
+\begin{enumerate}
+\item Model-agnostic \pause
+\item Sequential decision making \pause
+\item Multi-agent teams \pause
+\item Contested environments
+    \begin{itemize}
+    \item Peer adversaries
+    \item Out-of-distribution events
+    \item Noisy sensors/actuators/comms
+    \item SWaP constraints
+    \end{itemize} \pause
+\item Online recovery and adaptation \pause
+\item Post-hoc analysis tools
+\end{enumerate}
+\end{frame}
+
+\begin{frame}
+\frametitle{Current Focus}
+\begin{enumerate}
+\item \textbf{Model-agnostic}
+\item \textbf{Sequential decision making}
+\item Multi-agent teams*
+\item Contested environments
+    \begin{itemize}
+    \item Peer adversaries*
+    \item Out-of-distribution events
+    \item Noisy sensors/actuators/comms
+    \item SWaP constraints
+    \end{itemize}
+\item Online recovery and adaptation*
+\item Post-hoc analysis tools*
+\end{enumerate}
+\end{frame}
+
+\begin{frame}
+    \frametitle{Concrete Examples - AirSim \cite{shah2017airsim}}
+
+    \begin{center}
+    \includegraphics[width=.35\linewidth]{airsim_env.png}
+    
+    \vspace{5em}
+    
+    \href{https://drive.google.com/file/d/1qAIBgbiiO6XUcDLMtiDFgVRyfxLGegly/view?usp=sharing}{Video}
+    
+    \end{center}
+
+\end{frame}
+
+\begin{frame}
+    \frametitle{Concrete Examples - PyBullet Drone Gym \cite{panerati2021learning}}
+    \begin{center}
+    \includegraphics[width=.5\linewidth]{pybullet_env.png}
+    
+    \vspace{5em}
+    
+    \href{https://drive.google.com/file/d/1PapqKlfqkpGqC2HsZ9a21i5zdeCZ-pCf/view?usp=sharing&t=9}{Video}
+    
+    \end{center}
+
+\end{frame}
+
+\begin{frame}
+    \frametitle{Concrete Examples - Planar Environment}
+    \begin{center}
+    \includegraphics[width=.35\linewidth]{planar_upper.png}
+    
+    \vspace{5em}
+    
+    \href{https://drive.google.com/file/d/1Zr2m8jATqG6eJnHG63lIeUUUm9lftc3o/view?usp=drive_link}{Video}
+    
+    \end{center}
+
+\end{frame}
+
+\begin{frame}
+    \frametitle{Black-box Agents for Planar Environment}
+    \begin{center}
+    \includegraphics[width=\linewidth]{bb_perf.png}    
+    \end{center}
+
+    \begin{itemize}
+        \item 3 agents: Random, Fitted Q-value Iteration, Hand-coded
+        \item Reward: $\pm 1$ per see/be seen relationship, tapers off from line of sight
+        \item Adversary: Weak (random) vs.\@ Peer (hand-coded)
+        \item ``Mistake,'' ``Failure:'' Any time an enemy sees a teammate
+    \end{itemize}
+
+\end{frame}
+
+\begin{frame}
+    \frametitle{Reminder -- Motivation and Challenges}
+    Motivation and Objective:
+    \begin{itemize}
+    \item No AI system is perfect,mistakes can be costly
+    \item \textbf{We want to:}
+        \begin{enumerate}
+        \item \textbf{Quantify uncertainty about the AI's performance}
+        \item \textbf{Intervene when the risk of a mistake is too high}
+        \item Debug the mistake before next time
+        \end{enumerate}
+    \end{itemize}
+    
+    Scope and Challenges:
+    \begin{enumerate}
+    \item \textbf{Model-agnostic}
+    \item \textbf{Sequential decision making}
+    \item Multi-agent teams*
+    \item Contested environments
+    \item Online recovery and adaptation*
+    \item Post-hoc analysis tools*
+    \end{enumerate}
+
+\end{frame}
+
+\begin{frame}
+    \frametitle{Problem Statement I (Formal)}
+    Original setting of black-box policy:
+        \begin{itemize}
+        \item $\pi: \mathcal{S} \rightarrow \mathcal{A}$ operates for at most $T$ time-steps
+        \item $F_t$ is the event of a failure (user-defined) at time $t$, which ends the episode early
+        \item $F_t$ is a binary predicate over $\mathcal{S}$
+        \end{itemize}
+    Mistake anticipation and intervention:
+        \begin{itemize}
+        \item $\mu_t: \mathcal{S} \rightarrow [0,1]$ estimates failure rate at some time $\geq t$
+        \item Additional ``\texttt{disengage}'' action ends the episode early and transfers control from $\pi$
+        \item Augmented policy:
+        \begin{align}
+            \pi'(s_t) = \begin{cases}
+                \texttt{disengage} & \text{if } \mu_t(s_t) > \tau_t \\
+                \pi(s_t) & \text{otherwise,}
+            \end{cases}
+        \end{align}
+        where $\tau_t$ is a threshold we need to design
+        \item $F'_t$ and $D'_t$ are the events that $\pi'$ fails or disengages at $t$
+        \end{itemize}
+\end{frame}
+
+\begin{frame}
+    \frametitle{Problem Statement II (Formal)}
+    Mistake anticipation and intervention:
+        \begin{itemize}
+        \item $\mu_t: \mathcal{S} \rightarrow [0,1]$ estimates failure rate at some time $\geq t$
+        \item Additional ``\texttt{disengage}'' action ends the episode early and transfers control from $\pi$
+        \item Augmented policy:
+        \begin{align}
+            \pi'(s_t) = \begin{cases}
+                \texttt{disengage} & \text{if } \mu_t(s_t) > \tau_t \\
+                \pi(s_t) & \text{otherwise,}
+            \end{cases}
+        \end{align}
+        where $\tau_t$ is a threshold we need to design
+        \item $F'_t$ and $D'_t$ are the events that $\pi'$ fails or disengages at $t$
+        \end{itemize}
+    We want provably low chance that $\pi'$ fails before disengaging:
+        \begin{align}
+            \text{Pr}(F'_0 \vee F'_1 \vee ... \vee F'_T) \leq \delta,
+        \end{align}
+    where $\delta$ is the acceptable risk of failure (user-defined).
+\end{frame}
+
+\begin{frame}
+    \frametitle{Concrete Example - Planar Environment}
+
+    \begin{center}
+        \includegraphics[height=10em]{planar_upper.png}\hfill
+        \includegraphics[height=10em]{failrate_upper.eps}
+
+    \end{center}
+
+        \textbf{Left:} Random initial state of the planar environment.  Green dots are allies and red dots are adversaries.  Arrows indicate headings and whaded wedges indicate fields of view. \textbf{Right:} Proportion of 1024 random episodes that have failed by time $t$, as a function of $t$.
+
+
+\end{frame}
+
+\begin{frame}
+    \frametitle{Approach}
+
+    \begin{itemize}
+        \item Conformal regression \cite{lei2018distribution} to anticipate mistakes
+        \begin{itemize}
+            \item Model-agnostic uncertainty quantification
+            \item Provable probabilistic guarantees
+        \end{itemize}
+
+        \item Monte-Carlo rollouts for
+        \begin{itemize}
+            \item Estimating failure rates for training/calibrating $\mu_t$ and $\tau_t$
+            \item Alternative courses of action when mistakes are anticipated
+            \item Post-hoc counterfactual analysis after deployment \cite{stepin2021survey}
+        \end{itemize}
+    \end{itemize}
+
+\end{frame}
+
+\begin{frame}
+    \frametitle{Background on Conformal Regression \cite{lei2018distribution}}
+
+    Procedure, given an acceptable error probability $\delta$:
+    \begin{enumerate}
+    \item Train a regression model $\mu: \mathcal{X} \rightarrow \mathcal{Y}$
+    \item Collect fresh i.i.d. ``calibration samples'' $(x_1, y_1), ..., (x_n, y_n) \sim \mathcal{D}$
+    \item \textbf{Compute the half-width $h$ of a $(1-\alpha)$-confidence interval based on the calibration data}
+    \end{enumerate}
+
+    Theoretical Guarantee: For a new i.i.d test sample $(x, y) \sim \mathcal{D}$:
+    \begin{align}
+    \text{Pr}(|\mu(x) - y| \geq h) \leq \alpha
+    \end{align}
+
+    \begin{itemize}
+    \item \textit{Informally:} Low chance that $\mu$'s test error is large
+
+    \item \textit{Main technical assumption:} The samples are exchangeable (entailed by i.i.d.)
+
+    \item \textit{``Marginal'' property:} Probability is taken over all realizations of the calibration data 
+   \end{itemize}
+
+\end{frame}
+
+\begin{frame}
+    \frametitle{Background on Conformal Regression \cite{lei2018distribution}}
+
+    Suppose you draw $n=4$ numbers $z_1, z_2, z_3, z_4$ from an unknown distribution $\mathcal{D}$ over $\mathbb{R}$, shown below.
+
+    \vspace{3em}
+
+    \begin{center}
+    \begin{tabular}{ccccc}
+    $z_2$ & $z_4$ & $z_1$ & $z_3$ & \phantom{$z_5$} \\
+    10.1 & 84.2 & 89.9 & 92.3 & \phantom{99.9}
+    \end{tabular}
+    \end{center}
+    
+    \vspace{3em}
+
+    What is the probability that your fifth draw is $\geq 92.3$? 
+
+    \vspace{1em}
+
+    \phantom{\textit{Exchangeability means any of these scenarios are equally likely}}
+
+\end{frame}
+
+\begin{frame}
+    \frametitle{Background on Conformal Regression \cite{lei2018distribution}}
+
+    Suppose you draw $n=4$ numbers $z_1, z_2, z_3, z_4$ from an unknown distribution $\mathcal{D}$ over $\mathbb{R}$, shown below.
+
+    \vspace{3em}
+
+    \begin{center}
+    \begin{tabular}{ccccc}
+    $z_2$ & $z_4$ & $z_1$ & $z_3$ & \textcolor{gray}{$z_5$} \\
+    10.1 & 84.2 & 89.9 & 92.3 & \textcolor{gray}{99.9}
+    \end{tabular}
+    \end{center}
+    
+    \vspace{3em}
+
+    What is the probability that your fifth draw is $\geq 92.3$? 
+
+    \vspace{1em}
+
+    \textit{Exchangeability means any of these scenarios are equally likely}
+
+\end{frame}
+
+\begin{frame}
+    \frametitle{Background on Conformal Regression \cite{lei2018distribution}}
+
+    Suppose you draw $n=4$ numbers $z_1, z_2, z_3, z_4$ from an unknown distribution $\mathcal{D}$ over $\mathbb{R}$, shown below.
+
+    \vspace{3em}
+
+    \begin{center}
+    \begin{tabular}{ccccc}
+    $z_2$ & $z_4$ & $z_1$ & \textcolor{gray}{$z_5$} & $z_3$ \\
+    10.1 & 84.2 & 89.9 & \textcolor{gray}{92.3} & 99.9
+    \end{tabular}
+    \end{center}
+    
+    \vspace{3em}
+
+    What is the probability that your fifth draw is $\geq 92.3$? 
+
+    \vspace{1em}
+
+    \textit{Exchangeability means any of these scenarios are equally likely}
+
+\end{frame}
+
+\begin{frame}
+    \frametitle{Background on Conformal Regression \cite{lei2018distribution}}
+
+    Suppose you draw $n=4$ numbers $z_1, z_2, z_3, z_4$ from an unknown distribution $\mathcal{D}$ over $\mathbb{R}$, shown below.
+
+    \vspace{3em}
+
+    \begin{center}
+    \begin{tabular}{ccccc}
+    $z_2$ & $z_4$ & \textcolor{gray}{$z_5$} & $z_1$ & $z_3$ \\
+    10.1 & 84.2 & \textcolor{gray}{89.9} & 92.3 & 99.9
+    \end{tabular}
+    \end{center}
+    
+    \vspace{3em}
+
+    What is the probability that your fifth draw is $\geq 92.3$? 
+
+    \vspace{1em}
+
+    \textit{Exchangeability means any of these scenarios are equally likely}
+
+\end{frame}
+
+\begin{frame}
+    \frametitle{Background on Conformal Regression \cite{lei2018distribution}}
+
+    Suppose you draw $n=4$ numbers $z_1, z_2, z_3, z_4$ from an unknown distribution $\mathcal{D}$ over $\mathbb{R}$, shown below.
+
+    \vspace{3em}
+
+    \begin{center}
+    \begin{tabular}{ccccc}
+    $z_2$ & \textcolor{gray}{$z_5$} & $z_4$ & $z_1$ & $z_3$ \\
+    10.1 & \textcolor{gray}{84.2} & 89.9 & 92.3 & 99.9
+    \end{tabular}
+    \end{center}
+    
+    \vspace{3em}
+
+    What is the probability that your fifth draw is $\geq 92.3$? 
+
+    \vspace{1em}
+
+    \textit{Exchangeability means any of these scenarios are equally likely}
+
+\end{frame}
+
+\begin{frame}
+    \frametitle{Background on Conformal Regression \cite{lei2018distribution}}
+
+    Suppose you draw $n=4$ numbers $z_1, z_2, z_3, z_4$ from an unknown distribution $\mathcal{D}$ over $\mathbb{R}$, shown below.
+
+    \vspace{3em}
+
+    \begin{center}
+    \begin{tabular}{ccccc}
+    \textcolor{gray}{$z_5$} & $z_2$ & $z_4$ & $z_1$ & $z_3$ \\
+    \textcolor{gray}{10.1} & 84.2 & 89.9 & 92.3 & 99.9
+    \end{tabular}
+    \end{center}
+    
+    \vspace{3em}
+
+    What is the probability that your fifth draw is $\geq 92.3$? 
+
+    \vspace{1em}
+
+    \textit{Exchangeability means any of these scenarios are equally likely}
+
+\end{frame}
+
+\begin{frame}
+    \frametitle{Background on Conformal Regression \cite{lei2018distribution}}
+
+    Suppose you draw $n=4$ numbers $z_1, z_2, z_3, z_4$ from an unknown distribution $\mathcal{D}$ over $\mathbb{R}$, shown below.
+
+    %% \vspace{3em}
+
+    \begin{center}
+    \begin{tabular}{ccccc}
+    $z_2$ & $z_4$ & $z_1$ & $z_3$ & \textcolor{gray}{$z_5$} \\
+    10.1 & 84.2 & 89.9 & 92.3 & \textcolor{gray}{99.9}
+    \end{tabular}
+    \end{center}
+    
+    %% \vspace{3em}
+
+    \begin{itemize}
+    \item There are $n+1=5$ ``buckets'' between the samples and equal likelihood that $z_5$ falls in any of them.
+    
+    %% \vspace{1em}
+    
+    \item If you want $\leq \alpha = 25\%$ chance of large error, set $d = 92.3$, which is the
+    \begin{align*}
+    \lceil (n+1)(1-\alpha)\rceil^\text{th} = \lceil 5\times 0.75\rceil^\text{th} = \lceil 3.75\rceil^\text{th} = 4^\text{th}
+    \end{align*}
+    smallest sample in the calibration set.
+
+    %% \vspace{1em}
+
+    \item Conformal regression simply applies this reasoning to $z_i = |\mu(x_i) - y_i|$.
+    \end{itemize}
+
+\end{frame}
+
+\begin{frame}
+    \frametitle{Pros/cons of conformal methods for us}
+    \begin{itemize}
+    \item Pros:
+        \begin{itemize}
+        \item Model-agnostic, works for any $\mathcal{D}$ and $\mu$
+        \item Theoretical guaranteed error rate $\leq \alpha$ of our choosing
+        \item $\text{Pr}(|\mu(x) - y| \geq h)$ looks reasonably close to $\text{Pr}(\mu_t(x) \geq \tau_t)$
+        \end{itemize}
+    \item Cons:
+        \begin{itemize}
+        \item Supervised learning paradigm, not sequential decision making
+        \item The probability we need to bound is
+            \begin{align*}
+            \text{Pr}(\bigvee_t F'_t) \leq \delta, \quad \text{ [episode failure] }
+            \end{align*}
+            not
+            \begin{align*}
+            \text{Pr}(|\mu(x) - y| \geq h) \leq \alpha \quad \text{ [large regression error] }
+            \end{align*}
+        \item $\text{Pr}(|\mu(x) - y| \geq h)$ is not exactly $\text{Pr}(\mu_t(x) \geq \tau_t)$
+        \item Assumes ground truth labels $y_i$ are known
+        \item Assumes test sample is i.i.d. with calibration samples
+        \end{itemize}
+    \end{itemize}
+\end{frame}
+
+\begin{frame}
+    \frametitle{Proposed Method}
+    Let $C'_t = \neg F'_t \wedge \neg D'_t$ denote the event that the episode continues at time $t$ ($\pi'$ does not fail or disengage)
+
+    \vspace{1em}
+
+    For $t$ in $0,1,...,T$:
+    \begin{itemize}
+    \item Rejection-sample training and calibration states from $\text{Pr}(s_t|\neg F'_t \wedge C'_{t-1}\wedge...\wedge C'_0)$
+    \item Estimate failure rates $\hat{y}\approx \text{Pr}(F_{>t}|s_t)$ with Monte-Carlo rollouts from each $s_t$
+    \item Fit $\mu(s_t) \approx \hat{y}$ on training samples
+    \item From calibration samples, construct confidence intervals for
+        \begin{enumerate}
+        \item $|\mu(s_t) - \hat{y}|$ with conformal approach
+        \item $|\hat{y} - \text{Pr}(F_{>t}|s_t)|$ with Hoeffding's inequality 
+        \end{enumerate}
+    \item Carefully select $\tau_t$ based on combined confidence intervals so as to guarantee acceptable episode-level failure rate $\leq\delta$
+    \end{itemize}
+
+    \textit{Key theoretical challenge:} Provably correct design for $\tau_t$
+
+    \textit{Key practical challenge:} Accurate-enough $\mu$ and $\hat{y}$
+
+\end{frame}
+
+\begin{frame}
+    \frametitle{Initial results at $t=0$ (``Go/No-Go'')}
+
+    \begin{center}
+        \includegraphics[width=\linewidth]{fsr_labels.eps}
+    \end{center}
+    \begin{itemize}
+    \item Black line: Estimated failure rate $\hat{y}$ from 4096 rollouts per random initial state
+    \item Grey envelope: 95\% Hoeffding confidence interval on $|\hat{y} - \text{Pr}(F_{> 0}|s_0)|$
+    \item Blue/red dots: Estimated failure rates from two disjoint halves of the rollouts
+    \item The horizontal axis uses an exponential scale for better visualization of high-failure regime.
+    \end{itemize}
+
+\end{frame}
+
+\begin{frame}
+    \frametitle{Initial results at $t=0$ (``Go/No-Go'')}
+
+    \begin{center}
+        \includegraphics[width=\linewidth]{fsr_fit.eps}
+    \end{center}
+    Same as previous figure except
+    \begin{itemize}
+    \item More initial state samples, only 256 rollouts per sample
+    \item Green line: Predictions of $\mu_0$ on all 10K samples, trained on 9K of them
+    \item $\mu_0$ is a linear model composed with sigmoid activation
+    \end{itemize}
+
+\end{frame}
+
+\begin{frame}
+    \frametitle{Initial results at $t=0$ (``Go/No-Go'')}
+
+    Partial theoretical result for $t=0$
+
+    \vspace{1em}
+
+    Simplifying assumptions:
+    \begin{itemize}
+    \item Assume true labels $y = \text{Pr}(F_{>0}|s_0)$ are known (ignore Monte-Carlo noise)
+    \item Restrict $\pi'$ so that it might disengage at $t=0$ but not $t > 0$ ($\tau_t = 1$ for $t > 0$)
+        \begin{align*}
+            \pi'(s_0) = \begin{cases}
+                \texttt{disengage} & \text{if } \mu_0(s_0) > \tau_0 \\
+                \pi(s_0) & \text{otherwise,}
+            \end{cases}
+        \end{align*}
+    \end{itemize}
+    Claim: Suppose $\text{Pr}(|\mu_0(s_0) - y| > h_0) \leq \alpha_0$.  Then $\text{Pr}(F'_{>0}) \leq h_0 + \alpha_0 + \tau_0$. [\textit{Proof below}]
+
+    \vspace{1em}
+
+    Practical use: Select minimal $h_0 + \alpha_0$ over the calibration data and choose $\tau_0 \leq \delta - (h_0 + \alpha_0)$ to get failure rate at most $\delta$.
+
+\end{frame}
+
+\begin{frame}
+    \frametitle{Example $\tau_0$ selection}
+
+    \begin{center}
+        \includegraphics[width=\linewidth]{calib_opt.eps}
+    \end{center}
+
+    For example, if you want at most $\delta = 0.1$ risk of failure, set $\tau \leq 0.1 - 0.07 = 0.03$.
+
+\end{frame}
+
+\begin{frame}
+    \frametitle{Empirical failure rates}
+
+    \begin{center}
+        \includegraphics[width=\linewidth]{}
+    \end{center}
+
+    Stacked bar chart of false positive (disengage rate) and false negative (continue and fail rate) probs
+    State in text marginal fail rate (using first rollout from each repetition)
+
+\end{frame}
+
+
+\begin{frame}
+    \frametitle{Theoretical Puzzle Pieces}
+\end{frame}
+
+\begin{frame}[allowframebreaks]
+        \frametitle{References}
+        \bibliographystyle{amsalpha}
+        \bibliography{./presentation.bib}
 \end{frame}
 
 \end{document}
