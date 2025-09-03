@@ -215,7 +215,7 @@
 
     \begin{center}
         \includegraphics[height=10em]{planar_upper.png}\hfill
-        \includegraphics[height=10em]{failrate_upper.eps}
+        %% \includegraphics[height=10em]{failrate_upper.eps}
 
     \end{center}
 
@@ -510,9 +510,9 @@
 \begin{frame}
     \frametitle{Initial Results at $t=0$ (``Go/No-Go'')}
 
-    \begin{center}
-        \includegraphics[width=\linewidth]{fsr_labels.eps}
-    \end{center}
+    %% \begin{center}
+    %%     \includegraphics[width=\linewidth]{fsr_labels.eps}
+    %% \end{center}
     \begin{itemize}
     \item Black line: Estimated failure rate $\hat{y}$ from 4096 rollouts per random initial state
     \item Grey envelope: 95\% Hoeffding confidence interval on $|\hat{y} - \text{Pr}(F_{> 0}|s_0)|$
@@ -525,10 +525,9 @@
 \begin{frame}
     \frametitle{Initial Results at $t=0$ (``Go/No-Go'')}
 
-    \begin{center}
-        %% \includegraphics[width=\linewidth]{fsr_fit.eps}
-        \includegraphics[width=\linewidth]{fsr_fit.png}
-    \end{center}
+    %% \begin{center}
+    %%     \includegraphics[width=\linewidth]{fsr_fit.png}
+    %% \end{center}
     Same as previous figure except
     \begin{itemize}
     \item More initial state samples, only 256 rollouts per sample
@@ -567,9 +566,9 @@
 \begin{frame}
     \frametitle{Example $\tau_0$ Selection}
 
-    \begin{center}
-        \includegraphics[width=\linewidth]{calib_opt.eps}
-    \end{center}
+    %% \begin{center}
+    %%     \includegraphics[width=\linewidth]{calib_opt.eps}
+    %% \end{center}
 
     For example, if you want at most $\delta = 0.1$ risk of failure, set $\tau \leq 0.1 - 0.07 = 0.03$.
 
@@ -578,9 +577,9 @@
 \begin{frame}
     \frametitle{Empirical Failure Rates}
 
-    \begin{center}
-        \includegraphics[width=\linewidth]{rep_results_10K.eps}
-    \end{center}
+    %% \begin{center}
+    %%     \includegraphics[width=\linewidth]{rep_results_10K.eps}
+    %% \end{center}
 
     \begin{itemize}
     \item 100 repetitions of the entire process from scratch
@@ -753,9 +752,9 @@
 \begin{frame}
     \frametitle{Evaluation in Planar Environment}
 
-    \begin{center}
-        \includegraphics[width=\linewidth]{counterfac.png}
-    \end{center}
+    %% \begin{center}
+    %%     \includegraphics[width=\linewidth]{counterfac.png}
+    %% \end{center}
 
     \begin{itemize}
     \item 5K repetitions of experiment, each with randomly sampled $\hat{s}$

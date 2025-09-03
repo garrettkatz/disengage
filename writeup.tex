@@ -44,16 +44,16 @@ Our goal is to anticipate likely failures before they occur so that we can disen
 \end{align}
 where $\mu_t$ is an auxiliary model trained to approximate $\text{Pr}(F_{\geq t}|s_t)$ and $\alpha_t$ is a threshold determined by conformal methods explained below.  Informally, if we have high confidence that the upcoming failure rate is below an acceptable level, we allow the black-box policy $\pi$ to operate normally. Otherwise, we disengage.
 
-We let $D_t'$ denote the event that $\pi'$ disengages at time $t$.  Since disengagement transfers control to some unknown policy, we model disengagement as terminating the episode but in a more acceptable manner than failure.  Similarly, we use $F_t'$ to denote the event of failure when using $\pi'$ in $\mathcal{E}'$, which has a different distribution than $F_t$ using the original policy and environment.  Note that in each time-step failure is checked before $\pi'$ can select an action, so $F_t'$ and $D_t'$ have an exclusive-or relationship.
+We let $D_t'$ denote the event that $\pi'$ disengages at time $t$.  Since disengagement transfers control to some unknown policy, we model disengagement as terminating the episode but in a more acceptable manner than failure.  Similarly, we use $F_t'$ to denote the event of failure when using $\pi'$ in $\mathcal{E}'$, which has a different distribution than $F_t$ using the original policy and environment.  Note that in each time-step failure is checked before $\pi'$ can select an action, so $F_t'$ and $D_t'$ cannot both be true.
 
 \textbf{Running Example:} Figure \ref{fig:planar} (left) depicts an idealized drone environment with multiple agents in continuous 2D space.  The goal of the green agents is to see, but not be seen, by the red agents.  Agent positions and headings are initialized uniformly at random at $t=0$ and controlled by their respective policies thereafter.  For sake of example we define ``failure'' as any state where a green agent lies in the field of view of a red agent.  The random initial state shown in the figure happens to be a failure state.
 
-Figure \ref{fig:planar} (right) estimates failure rates (marginalized over all $s_t$) using a batch of 1024 random episodes and a maximum duration $T=1024$.  Here, a heuristic hand-coded policy was used as the black-box controller for the green agents, whereas the red agents move randomly. Technically, the figure shows the probability of failing \textit{prior} to time $t$, which is not quite $1 - \text{Pr}(F_{\geq t})$ since there is also the possibility of reaching $T=512$ without failing at all.  The initial failure rate at $t=0$ is quite high because randomly initialized agent positions will frequently produce failure states right out the gate.  Failure rate increases more slowly as time goes on, meaning that the green agent policies do a fairly good job of staying out of sight as long as they are not unlucky in the random initialization.  The black-box policy is not optimal so it does tend to ``trip up'' eventually if one runs the episode indefinitely, but the mistakes become fewer and far between as time goes on.  At any rate, we use $T=1024$ here to ascertain the limiting behavior, but in the subsequent experiments we will use $T=200$.  We have intentionally used a sub-optimal black-box policy that makes mistakes, because we are interested in methods for anticipating mistakes.
+Figure \ref{fig:planar} (right) estimates failure rates (marginalized over all $s_t$) using a batch of 1024 random episodes and a maximum duration $T=1024$.  Here, a heuristic hand-coded policy was used as the black-box controller for the green agents, whereas the red agents move randomly. Technically, the figure shows the probability of failing \textit{prior} to time $t$, which is not quite $1 - \text{Pr}(F_{\geq t})$ since there is also the possibility of reaching time-step $T$ without failing at all.  The initial failure rate at $t=0$ is quite high because randomly initialized agent positions will frequently produce failure states right out the gate.  Failure rate increases more slowly as time goes on, meaning that the green agent policies do a fairly good job of staying out of sight as long as they are not unlucky in the random initialization.  The black-box policy is not optimal so it does tend to ``trip up'' eventually if one runs the episode indefinitely, but the mistakes become fewer and far between as time goes on.  At any rate, we use $T=1024$ here to ascertain the limiting behavior, but in the subsequent experiments we will use $T=200$.  We have intentionally used a sub-optimal black-box policy that makes mistakes, because we are interested in methods for anticipating mistakes.
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[height=12em]{planar_fail.png}\hfill
-    \includegraphics[height=12em]{failrate_lower.eps}
+    %% \includegraphics[height=12em]{planar_fail.png}\hfill
+    %% \includegraphics[height=12em]{failrate_lower.eps}
     \caption{\textbf{Left:} Random initial state of the planar environment.  Green dots are allies and red dots are adversaries.  Arrows indicate headings and whaded wedges indicate fields of view. \textbf{Right:} Proportion of 1024 random episodes that have failed by time $t$, as a function of $t$.}
     \label{fig:planar}
 \end{figure}
@@ -62,8 +62,8 @@ It doesn't make so much sense to start an episode in a failure situation, so we 
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[height=12em]{planar_upper.png}\hfill
-    \includegraphics[height=12em]{failrate_upper.eps}
+    %% \includegraphics[height=12em]{planar_upper.png}\hfill
+    %% \includegraphics[height=12em]{failrate_upper.eps}
     \caption{Same as Fig.\@ \ref{fig:planar} but with random initialization that avoids failure at $t=0$.}
     \label{fig:planar_upper}
 \end{figure}
@@ -76,7 +76,7 @@ Figure \ref{fig:failest} illustrates the challenge when estimating the failure r
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=\linewidth]{fsr_labels.eps}
+    %% \includegraphics[width=\linewidth]{fsr_labels.eps}
     \caption{\textbf{Left:} Estimated failure rates for 256 random initial states and up to 100 timesteps.  Solid line shows the estimate, grey envelope shows the 95\% Hoeffding confidence intervals with 4096 rollouts. Blue and red dots indicate estimates using two disjoint halves of the rollouts.  The horizontal axis uses an exponential scale for better visualization of high-failure regime.}
     \label{fig:failest}
 \end{figure}
@@ -146,6 +146,15 @@ since any event is no more likely than other events it entails.  Next using a un
 Now we will relate $y$ to $\delta/(T+1)$.  We have assumed 
 
 The event $y - \mu > x_t + \beta_t$ is equivalent to $\mu < y - (x_t + \beta_t)$, which is precisely $\neg D_t$ if we set $\alpha_t = y - (x_t$
+
+\section{Starting fresh}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[height=12em]{get_failrate_data}\hfill
+    \caption{Fail rates for 1024 randomly sampled initial states, estimated from 512 rollouts, with $95\%$ Clopper-Pearson confidence intervals indicated by gray envelope.}
+    \label{fig:planar}
+\end{figure}
 
 
 \end{document}

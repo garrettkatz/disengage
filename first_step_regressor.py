@@ -16,9 +16,9 @@ if __name__ == "__main__":
 
     do_rollouts = False
     do_train = False
-    do_cal = True
-    do_deploy = True
-    do_reps = True
+    do_cal = False
+    do_deploy = False
+    do_reps = False
     do_show = True
 
     # setup experiment parameters
@@ -27,7 +27,7 @@ if __name__ == "__main__":
     view_angle = np.pi/16
     step_size = np.array([0.05, 0.05, .1]) # larger rotational motion
 
-    num_reps = 100
+    num_reps = 1
     num_timesteps = 100
     num_samples = 4096 # number of samples for fitting regressor and calibration
     num_rollouts = 256 # number of rollouts to estimate state-conditioned failure rate
