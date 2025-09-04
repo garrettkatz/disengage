@@ -13,7 +13,6 @@ def do_rollouts(env, policy, init_states, num_rollouts, num_timesteps, failure_f
     for r in range(num_rollouts):
         env.state = init_states
         for t in range(num_timesteps):
-            _, viz = env._team_reward(env.state.adversaries, env.state.allies)
             failures[:,r] = failures[:,r] | failure_function(env)
             action = policy(observation)
             observation, _, _, _, _ = env.step(action)
@@ -26,13 +25,13 @@ def do_rollouts(env, policy, init_states, num_rollouts, num_timesteps, failure_f
 
 if __name__ == "__main__":
 
-    collect_data = False
+    collect_data = True
     do_show = True
 
     # experiment parameters
     num_timesteps = 100
-    num_samples = 1024 # number of state samples
-    num_rollouts = 512 # number of rollouts per state to estimate state-conditioned failure rate
+    num_samples = 4096 # number of state samples
+    num_rollouts = 32#512 # number of rollouts per state to estimate state-conditioned failure rate
     confidence = 0.05 # confidence for Hoeffding interval
 
     # setup environment and policy
@@ -64,12 +63,12 @@ if __name__ == "__main__":
     
         print(f"marginal failure rate stats: {fail_rates.mean()} +/- {fail_rates.std()}")    
         with open(f"failrate_data.pkl", "wb") as f:
-            pk.dump((init_states, fail_rates), f)
+            pk.dump((env, init_states, fail_rates), f)
 
     if do_show:
 
         with open(f"failrate_data.pkl", "rb") as f:
-            (init_states, fail_rates) = pk.load(f)
+            (env, init_states, fail_rates) = pk.load(f)
 
         # setup half-width of hoeffding confidence interval
         hoeffding = np.sqrt(- np.log(confidence/2) / (2*num_rollouts))
