@@ -30,8 +30,8 @@ if __name__ == "__main__":
 
     # experiment parameters
     num_timesteps = 100
-    num_samples = 4096 # number of state samples
-    num_rollouts = 32#512 # number of rollouts per state to estimate state-conditioned failure rate
+    num_samples = 10_000 # number of state samples
+    num_rollouts = 512 # number of rollouts per state to estimate state-conditioned failure rate
     confidence = 0.05 # confidence for Hoeffding interval
 
     # setup environment and policy

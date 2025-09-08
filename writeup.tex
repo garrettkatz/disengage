@@ -149,13 +149,27 @@ The event $y - \mu > x_t + \beta_t$ is equivalent to $\mu < y - (x_t + \beta_t)$
 
 \section{Starting fresh}
 
+Estimating regression labels: Clopper-Pearson confidence intervals are much tighter than Hoeffding and should be able to address that hurdle.  See Figure \ref{fig:clopper}.
+
 \begin{figure}[htbp]
     \centering
-    \includegraphics[height=12em]{get_failrate_data}\hfill
-    \caption{Fail rates for 1024 randomly sampled initial states, estimated from 512 rollouts, with $95\%$ Clopper-Pearson confidence intervals indicated by gray envelope.}
-    \label{fig:planar}
+    \includegraphics[height=12em]{get_failrate_data_10k_512r}\hfill
+    \caption{Fail rates for 10K randomly sampled initial states, estimated from 512 rollouts each, with $95\%$ Clopper-Pearson confidence intervals indicated by gray envelope.}
+    \label{fig:clopper}
 \end{figure}
 
+Next hurdle: Fitting (but not overfitting) the regressor.  Simple linear regressors and MLP trained with SGD both fail to fit the samples.  There appears to be a label ``imbalance'' issue: The regressors always predict near-zero failure rate, which works on the majority of samples but ignores the minority of samples in the high failure rate regime.  Before attempting a scheme to rebalance labels by resampling the training data, you tried MLP with Adam. It fits the training samples much better, including high failrate ones, generalization performance is mixed even with early stopping.  More reasonable generalization performance was achieved with more training data (see Figure \ref{fig:tfr}); the 95\% confidence interval on calibration errors is significantly lower than the largest failure rates.
+
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{tfr_results1.png}
+    \includegraphics[width=\textwidth]{tfr_results10k_512r.png}
+    \caption{Training an MLP with 6465 parameters on failrate labels.  \textbf{Top:} 3000 training points, 1096 validation.  \textbf{Bottom}: 8K training points, 1K each validation and calibration, 512 rollouts to estimate each failrate label, plus calibration errors.}
+    \label{fig:tfr}
+\end{figure}
+
+Now let's properly derive the first-step conformal fail probability with disengage option.
 
 \end{document}
 
