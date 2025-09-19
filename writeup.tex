@@ -169,7 +169,13 @@ Next hurdle: Fitting (but not overfitting) the regressor.  Simple linear regress
     \label{fig:tfr}
 \end{figure}
 
-Now let's properly derive the first-step conformal fail probability with disengage option.
+Now let's properly derive the first-step conformal fail probability with disengage option.  You can basically rewrite the proof sketch in presentation.pdf, but make the following updates:
+
+Incorporate Clopper CI and marginal guarantee considerations
+
+Check if precise coverage guarantees let you weight $(\tau_0 + h_0)$ by $1-\alpha_0$ since it comes from the integral over $\mu\leq \tau_0 \wedge |\mu - y|\leq h \subset |\mu - y|\leq h$
+
+Consider that minimizing disengage rate means maximizing $\tau$ subject to overall failrate less than $\delta$.  Just isolate $\tau$ in terms of $\delta, \alpha_0, h_0$ and maximize over $\alpha_0, h_0$ data quantiles.
 
 \end{document}
 
