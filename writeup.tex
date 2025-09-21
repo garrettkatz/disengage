@@ -177,5 +177,11 @@ Check if precise coverage guarantees let you weight $(\tau_0 + h_0)$ by $1-\alph
 
 Consider that minimizing disengage rate means maximizing $\tau$ subject to overall failrate less than $\delta$.  Just isolate $\tau$ in terms of $\delta, \alpha_0, h_0$ and maximize over $\alpha_0, h_0$ data quantiles.
 
+\subsection{New appoach}
+
+Marginalization actually makes the proof look problematic.  One term has an expected value of $h_0(\mathcal{D},\alpha_0)$ and how are we supposed to get that?  Another step seems shaky in how it deals with $|\mathcal{D}$ in the integral.
+
+Fortunately you had another idea which seems simpler and better.  Instead of all this complicated math, it seems you can go back to the original conformal prediction results if you define $z = \mathbb{1}[F'_{>0}]\cdot(1-\mu)$ and treat this as the scalar random variable being quantiled.  $z>1-\tau$ if and only if $\mathbb{1}[F'_{>0}](1-\mu) > 1-\tau$ if and only if $F'_{>0}\wedge \mu < \tau$ if and only if $F'_{>0}$.  So the probability you bound in standard conformal prediction will be precisely the probability of failure without disengage.  Do conformal on $z$ with desired $\alpha$ to get quantile-determine $h$, and set $\tau = 1-h$.  Use your train-first-regressor pipeline to empirically check if this reasoning pans out.  Add another file that calls the getdata and train helpers in a loop, and empirically check the fail vs disengage rates after trained.
+
 \end{document}
 

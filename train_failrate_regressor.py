@@ -20,7 +20,7 @@ def train_regressor(model, optimizer, features, labels, num_train, num_valid, nu
         lc["train"].append(loss.item())
         
         with tr.no_grad():
-            predictions = model(x)
+            predictions = model(features)
             loss = tr.mean((predictions[num_train:num_train+num_valid] - labels[num_train:num_train+num_valid])**2)
             lc["valid"].append(loss.item())
 
