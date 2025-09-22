@@ -8,7 +8,7 @@ import pickle as pk
 import matplotlib.pyplot as pt
 
 def do_rollouts(env, policy, init_states, num_rollouts, num_timesteps, failure_function, verbose=False):
-    failures = np.zeros((num_samples, num_rollouts), dtype=bool)
+    failures = np.zeros((init_states.batch_size(), num_rollouts), dtype=bool)
     observation = env.get_observation(init_states)
     for r in range(num_rollouts):
         env.state = init_states
@@ -16,16 +16,23 @@ def do_rollouts(env, policy, init_states, num_rollouts, num_timesteps, failure_f
             failures[:,r] = failures[:,r] | failure_function(env)
             action = policy(observation)
             observation, _, _, _, _ = env.step(action)
-        if verbose and (r % (num_rollouts//10)) == 0:
+        if verbose and (num_rollouts < 10 or (r % (num_rollouts//10)) == 0):
             fail_rates = failures[:,:r+1].mean(axis=1)
             print(f"rollout {r} of {num_rollouts}, fail_rates: {fail_rates.min()} <= ~{fail_rates.mean()} +/- {fail_rates.std()} <= {fail_rates.max()}")
 
     fail_rates = failures.mean(axis=1)
     return fail_rates
 
+def failure_function(env):
+    """
+    Assumes env.state is set and batched
+    """
+    _, viz = env._team_reward(env.state.adversaries, env.state.allies)
+    return viz.any(axis=(-2,-1))    
+
 if __name__ == "__main__":
 
-    collect_data = True
+    collect_data = False
     do_show = True
 
     # experiment parameters
@@ -47,13 +54,6 @@ if __name__ == "__main__":
         view_angle=view_angle,
     )
     policy = Policy(env)
-
-    def failure_function(env):
-        """
-        Assumes env.state is set and batched
-        """
-        _, viz = env._team_reward(env.state.adversaries, env.state.allies)
-        return viz.any(axis=(-2,-1))    
 
     if collect_data:
 
@@ -84,16 +84,19 @@ if __name__ == "__main__":
         p_u[np.isnan(p_u)]= 0
 
         idx = np.argsort(-fail_rates)
-        # ylo = fail_rates - hoeffding
-        # yhi = fail_rates + hoeffding
-        ylo = p_u
-        yhi = p_o
-        pt.figure(figsize=(5,3))
-        pt.fill_between(1+np.arange(len(idx)), ylo[idx], yhi[idx], color=(.75,)*3, label="Confidence interval")
-        pt.plot(1+np.arange(len(idx)), fail_rates[idx], label="Fail rate")
-        pt.xlabel("Initial states (sorted by estimated fail rate)")
-        pt.ylabel("Estimated fail rate")
-        pt.xscale("log")
+        pt.figure(figsize=(10,4))
+
+        for i, (ylo, yhi, name) in enumerate([(fail_rates-hoeffding, fail_rates + hoeffding, "Hoeffding"), (p_u, p_o, "Clopper-Pearson")]):
+
+            pt.subplot(1,2,i+1)
+            pt.fill_between(1+np.arange(len(idx)), ylo[idx], yhi[idx], color=(.75,)*3, label="Confidence interval")
+            pt.plot(1+np.arange(len(idx)), fail_rates[idx], label="Fail rate")
+            pt.xscale("log")
+            pt.ylim([fail_rates.min()-hoeffding - .05, fail_rates.max()+hoeffding + .05])
+            pt.title(name)
+
+        pt.gcf().supxlabel("Initial states (sorted by estimated fail rate)")
+        pt.gcf().supylabel("Estimated fail rate")
         pt.tight_layout()
         pt.savefig("get_failrate_data.eps")
         pt.show()

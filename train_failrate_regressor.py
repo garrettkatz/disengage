@@ -14,9 +14,9 @@ def train_regressor(model, optimizer, features, labels, num_train, num_valid, nu
     for update in range(num_updates):
         errors = model(features[:num_train]) - labels[:num_train]
         loss = tr.mean(errors**2)
-        opt.zero_grad()
+        optimizer.zero_grad()
         loss.backward()
-        opt.step()
+        optimizer.step()
         lc["train"].append(loss.item())
         
         with tr.no_grad():
@@ -42,7 +42,7 @@ if __name__ == "__main__":
     num_valid = 1000 # number of samples for testing only, leave some for calibration
     num_updates = 20_000 # number of gradient updates
 
-    with open(f"failrate_data_10k_512r.pkl", "rb") as f:
+    with open("failrate_data_10k_512r.pkl", "rb") as f:
         (env, init_states, fail_rates) = pk.load(f)
 
     get_features = FeatureExtractor(env) # linear
@@ -122,13 +122,16 @@ if __name__ == "__main__":
     pt.title(f"Early stop ({stop}) performance")
 
     pt.subplot(1,4,4)
-    pt.plot(errors, 'r-', label="errors")
-    pt.plot([0,len(errors)],[interval,interval], 'k--', label="95%% confidence interval")
-    pt.ylim([min(predictions.min(),labels.min()), max(predictions.max(),labels.max())])
+    sort_idx = np.argsort(-labels)
+    pt.plot(np.arange(1,len(labels)+1), predictions_early[sort_idx], 'r.', label="predictions")
+    pt.plot(np.arange(1,len(labels)+1), labels[sort_idx], 'k-', label="labels")
+    # pt.plot([0,len(errors)],[interval,interval], 'k--', label="95%% confidence interval")
+    # pt.ylim([min(predictions.min(),labels.min()), max(predictions.max(),labels.max())])
     pt.legend()
-    pt.xlabel("Sorted calibration points")
-    pt.ylabel("Absolute error")
-    pt.title("Conformal calibration")
+    pt.xlabel("Sorted samples")
+    pt.ylabel("Failure rate")
+    pt.xscale("log")
+    # pt.title("Conformal calibration")
 
     pt.tight_layout()
     pt.savefig("tfr_results.png")

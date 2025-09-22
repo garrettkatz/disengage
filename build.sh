@@ -1,11 +1,11 @@
-pdflatex writeup.tex
-pdflatex writeup.tex
+pdflatex pres.tex
+pdflatex pres.tex
 
-bibtex writeup.aux
-bibtex writeup.aux
+bibtex pres.aux
+bibtex pres.aux
 
-pdflatex writeup.tex
-pdflatex writeup.tex
+pdflatex pres.tex
+pdflatex pres.tex
 
-evince writeup.pdf &
+evince pres.pdf &
 

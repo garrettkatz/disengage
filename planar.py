@@ -20,6 +20,9 @@ class PlanarState:
         self.allies = allies
         self.adversaries = adversaries
 
+    def batch_size(self):
+        return len(self.allies)
+
     def expand_to(self, batch_size):
         # forms a batch of duplicates of self, to initialize rollouts
         # assumes self is a single, unbatched state
