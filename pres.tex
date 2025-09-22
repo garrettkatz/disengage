@@ -3,6 +3,8 @@
 %% \documentclass{beamer}
 
 \usepackage{hyperref}
+\usepackage{ulem}
+\usepackage{bbold}
 
 \usetheme {default}
 
@@ -14,7 +16,7 @@
 }
 
 % Title page details
-\title {Mitigating AI Mistakes in Sequential Decision-Making with Model-Agnostic Conformal Uncertainty Quantification}
+\title {Model-Agnostic Mistake Mitigation \\ in Sequential Decision-Making AIs}
 \subtitle{}
 \author{Garrett E. Katz}
 \institute{Associate Professor, EECS, Syracuse University}
@@ -40,10 +42,20 @@
 \item No AI system is perfect; (costly) mistakes will happen
 \item Can we anticipate failures and disengage the AI before they occur?
 \end{itemize}
+
+\begin{centering}
+\includegraphics[width=.5\linewidth]{bard.png}
+
+{\tiny CFOTO/Future Publishing via Getty Images}
+
+{\tiny \url{https://time.com/6254226/alphabet-google-bard-100-billion-ai-error/}}
+
+\end{centering}
+
 \end{frame}
 
 \begin{frame}
-\frametitle{Scope and Challenges}
+\frametitle{Project Scope and Challenges}
 
 Current focus:
 \begin{enumerate}
@@ -166,7 +178,74 @@ Broader context:
     \begin{itemize}
         \item Model-agnostic uncertainty quantification
         \item Provable probabilistic guarantees
-        \item But this is not just regression (hence the research challenge)
+        \item But Sequential Decision Making $\ne$ regression (hence the research challenge)
+    \end{itemize}
+
+\end{frame}
+
+\begin{frame}
+    \frametitle{Background on Conformal Regression \cite{lei2018distribution}}
+
+    Procedure, given an acceptable error probability $\delta$:
+    \begin{enumerate}
+    \item Train a regression model $\mu: \mathcal{X} \rightarrow \mathcal{Y}$
+    \item Collect fresh i.i.d. ``calibration samples'' $(x_1, y_1), ..., (x_n, y_n) \sim \mathcal{D}$
+    \item \textbf{Compute the half-width $h$ of a $(1-\delta)$-confidence interval based on the calibration data}
+    \end{enumerate}
+
+    Theoretical Guarantee: For a new i.i.d test sample $(x, y) \sim \mathcal{D}$:
+    \begin{align}
+    \text{Pr}(|\mu(x) - y| \leq h) \geq 1-\delta
+    \end{align}
+
+    \begin{itemize}
+    \item \textit{Informally:} $\mu$'s test error is likely ($\geq 1 - \delta$) to be small ($\leq h$)
+
+    \item \textit{Main technical assumption:} The samples are exchangeable (entailed by i.i.d.)
+
+    \item \textit{``Marginal'' property:} Probability is taken over all realizations of the sample data 
+   \end{itemize}
+
+\end{frame}
+
+\begin{frame}
+    \frametitle{Why Does Conformal Regression Work?}
+
+    \begin{itemize}
+    \item Suppose you sample points $z_1,...,z_{100}$ i.i.d from a distribution $\mathcal{D}$.
+    \item\textit{Question:} What is the probability that $z_{100} > \text{max}(z_1,...,z_{99})$?
+
+    \pause
+
+    \item \textit{Answer:} At most $1/100$ (i.i.d. means that no sample has an ``unfair advantage'')
+    \item (Could be less than $1/100$ in corner cases, e.g. $\mathcal{D}$ is a point mass)
+
+    \end{itemize}
+
+    \vspace{1em}
+    Conformal regression just applies this fact with $z = |\mu(x) - y|$ and $h = \text{max}(z_1,...,z_{99})$:
+    
+    \begin{align}
+    \text{Pr}(z \leq h) \geq 99/100.
+    \end{align}
+
+\end{frame}
+
+\begin{frame}
+    \frametitle{Can We Use Conformal Regression?}
+
+    Challenges:
+    \begin{itemize}
+    \item Label noise: $(x,y) = \left(s_t, \text{Pr}(F_{>t}|s_t)\right)$, but we have to estimate $\text{Pr}(F_{>t}|s_t)$ from rollouts
+    \item Well-trained models: How well does $\mu_t$ fit the training data?
+    \item Sequential decision-making: We need to combine per-$t$ guarantees for an episode-level guarantee
+    \item Different probabilities: $\text{Pr}(|\mu(s_t) - y| > h) \ne \text{Pr}(F'_{>t}|s_t)$
+    \end{itemize}
+
+    Related work on conformal methods for sequential decision making:
+    \begin{itemize}
+    \item \cite{dietterich2022conformal} provide per-timestep confidence intervals on rewards
+    \item \cite{lekeufack2024conformal} work with sequential decision making but assume access to a ``conservative'' policy guaranteed to avoid failure 
     \end{itemize}
 
 \end{frame}
@@ -188,7 +267,115 @@ Broader context:
 \end{frame}
 
 \begin{frame}
-    \frametitle{Baseline for Comparison}
+    \frametitle{Training $\mu$ ($t=0$)}
+
+    \begin{center}
+        \includegraphics[width=\linewidth]{tfr_results.png}
+    \end{center}
+
+    \begin{itemize}
+    \item $\mu_0$ is 3-layer MLP
+    \item 8K training samples, 1K validation samples
+    \item Avoid overfitting with early stopping (minimum loss on validation set)
+    \end{itemize}
+
+\end{frame}
+
+\begin{frame}
+    \frametitle{Theoretical Guarantee?}
+    \setbeamercolor{normal text}{fg=gray} % Set the foreground color of normal text to red
+    \usebeamercolor*{normal text} % Apply the color change
+
+    {\tiny
+    Given: $\text{Pr}(|\mu_0(s_0) - y| > h_0) \leq \alpha_0$ and $D'_0 \Leftrightarrow \mu_0(s_0) > \tau_0$.
+
+    To show: $\text{Pr}(F'_{>0}) \overset{?}{\leq} h_0 + \alpha_0 + \tau_0$
+
+    Proof sketch:
+    \begin{itemize}
+
+    \item Failure entails that $\pi$ did not disengage
+    \begin{align*}
+    \text{Pr}(F'_{>0})  = \text{Pr}(F'_{>0} \wedge \neg D'_0) = \text{Pr}(F'_{>0} \wedge \mu_0(s_0) \leq \tau_0)
+    \end{align*}
+
+    \item Expand marginal probability over states
+    \begin{align*}
+    \text{Pr}(F'_{>0} \wedge \mu_0(s_0) \leq \tau_0)
+         &= \int_{s_0}\text{Pr}(F'_{>0} \wedge \mu_0(s_0) \leq \tau_0|s_0)d\rho(s_0) \\
+         &= \int_{\mu \leq \tau}\text{Pr}(F'_{>0}|s_0)d\rho(s_0) = \int_{\mu \leq \tau}y\, d\rho(s_0)
+    \end{align*}
+
+    \item Split into cases whether $|\mu - y|>h$
+    \begin{align*}
+    \int_{\mu \leq \tau}y\, d\rho(s_0)
+        &= \int_{\mu \leq \tau, |\mu-y|>h} y\, d\rho(s_0) + \int_{\mu \leq \tau, |\mu-y|\leq h} y\, d\rho(s_0) \\
+        &\leq \int_{|\mu-y|>h}d\rho(s_0) + \int_{\mu \leq \tau, |\mu-y|\leq h} (\tau_0+h_0)\, d\rho(s_0) \\
+        &\leq \alpha_0 + (\tau_0+h_0)
+    \end{align*}
+    \end{itemize}
+    }
+\end{frame}
+
+\begin{frame}
+    \frametitle{Theoretical Guarantee: Better Approach ($t=0$)}
+
+    Procedure:
+    \begin{itemize}
+    \item Calculate $z = \mathbb{1}[F_{>0}](1 - \mu_0(s_0))$ on each calibration sample. \\
+        ({\tiny $\mathbb{1}[\cdot]$ is the indicator function})
+    \item Select $h$ by standard conformal method: $(1-\delta)$ quantile of calibration statistics $z_1,...,z_n$.
+    \item Set $\tau = 1 - h$.  Then $\text{Pr}(F_{>0}\wedge\neg D'_0) \leq \delta$ is guaranteed.
+    \end{itemize}
+
+    Theoretical analysis:
+    \begin{itemize}
+    \item Let $z = \mathbb{1}[F_{>0}](1 - \mu_0(s_0))$ and $h = 1-\tau$.
+    \item $z > h$ if and only if $F_{>0}\wedge\neg D'_0$.
+    \item So $\text{Pr}(z > h) \leq \delta$ if and only if $\text{Pr}(F_{>0}\wedge\neg D'_0) \leq \delta$
+    \end{itemize}
+
+\end{frame}
+
+\begin{frame}
+    \frametitle{Theoretical Guarantee: More detail ($t=0$)}
+
+    \begin{itemize}
+    \item $\neg D'_0$ means $\mu_0(s_0)\leq\tau$ means $1-\mu_0(s_0)\geq 1 - \tau$
+    \pause
+    \item If success, $\mathbb{1}[F_{>0}]=0$ so $\mathbb{1}[F_{>0}](1 - \mu_0(s_0)) = 0$
+    \pause
+    \item If failure, $\mathbb{1}[F_{>0}]=1$ so $\mathbb{1}[F_{>0}](1 - \mu_0(s_0)) = (1 - \mu_0(s_0))$
+    \pause
+    \item Therefore, failure without disengaging $(F_{>0}\wedge\neg D'_0)$ means $\mathbb{1}[F_{>0}](1 - \mu_0(s_0))\geq 1 - \tau$.
+    \end{itemize}
+
+\end{frame}
+
+\begin{frame}
+    \frametitle{Theoretical Guarantee: Extending beyond $t=0$}
+
+    \begin{itemize}
+    \item We can construct $z$ with similar reasoning but the formula is more complicated\pause
+    \item Failure at any $t$ without disengaging beforehand:
+    \begin{align}
+    (F_1\wedge \neg D'_0) \vee (F_2\wedge\neg D'_1\wedge \neg D'_0) \vee ... %(F_3\wedge\neg D'_2\wedge\neg D'_1\wedge \neg D'_0) \vee ... 
+    \end{align}\pause
+    \item Corresponding statistic:
+    \begin{align}
+    z = \mathbb{1}[F_1](1 - \mu_0(s_0)) + \mathbb{1}[F_2]\cdot\text{min}_{t<2}(1-\mu_t(s_t)) + ...
+    \end{align}\pause
+    \item Staying engaged up to $t=2$ means $\text{max}_{t<2}\mu_t(s_t) < \tau$.
+    \item In turn this means $\text{min}_{t<2}(1-\mu_t(s_t)) > 1 - \tau$.
+    \item Therefore, $F'_{>0}$ if and only if $z > 1 - \tau$.
+    \end{itemize}
+
+\end{frame}
+
+\begin{frame}
+    \frametitle{Empirical Validation: Baseline for Comparison}
+
+    Before we empirically check our method's performance, what is a suitable reference point to assess whether our method is performing well?
 
     \begin{itemize}
     \item Suppose $\text{Pr}(F_{>0}) \approx 0.7\%$, and you want $\text{Pr}(F'_{>0}) \leq \delta = 0.3\%$
@@ -204,9 +391,9 @@ Broader context:
 
 
 \begin{frame}
-    \frametitle{Empirical Check}
+    \frametitle{Empirical Validation: Results for $t=0$}
 
-    $\text{Pr}(F_{>0}) \approx 0.70\%$, set $\delta = 0.3\%$, 5000 experimental repetitions
+    $\text{Pr}(F_{>0}) \approx 0.70\%$, set $\delta = 0.3\%$, 1K calibration samples, 5000 experimental repetitions
 
     \begin{center}
         \begin{tabular}{c|c|c}
@@ -225,6 +412,23 @@ Broader context:
 
 \end{frame}
 
+\begin{frame}
+    \frametitle{Next Steps}
+    \begin{itemize}
+    \item Short-term
+        \begin{enumerate}
+        \item Collect data and train the remaining $\mu_t$, $t>0$
+        \item Redo empirical validation of extended theoretical guarantee
+        \item Test on more environments and black-box models
+        \end{enumerate}
+    \item Mid-/Long-term
+        \begin{enumerate}
+        \item Multi-agent version (both blackbox and $\mu$)
+        \item Address out-of-distribution issues, contested environments, etc.
+        \item Further develop in-mission recovery and post-hoc analysis
+        \end{enumerate}
+    \end{itemize}
+\end{frame}
 
 %%     Related work on conformal methods for sequential decision making:
 %%     \begin{itemize}
