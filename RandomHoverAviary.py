@@ -14,7 +14,7 @@ class RandomHoverAviary(HoverAviary):
               options : dict = None):
 
         self.INIT_XYZS = self.base_xyzs + .1*np.random.randn(*self.base_xyzs.shape)
-        self.INIT_RPYS = self.base_rpys + .05*np.random.randn(*self.base_rpys.shape)
+        self.INIT_RPYS = self.base_rpys + .1*np.random.randn(*self.base_rpys.shape)
         # print(self.INIT_XYZS)
         # input('.')
         return super().reset(seed, options)

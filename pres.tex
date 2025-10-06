@@ -391,7 +391,7 @@ Broader context:
 
 
 \begin{frame}
-    \frametitle{Empirical Validation: Results for $t=0$}
+    \frametitle{Empirical Validation [Planar 2D]: Results for $t=0$}
 
     $\text{Pr}(F_{>0}) \approx 0.70\%$, set $\delta = 0.3\%$, 1K calibration samples, 5000 experimental repetitions
 
@@ -409,6 +409,59 @@ Broader context:
         {\tiny $\tau=1$ when calibration data contains no failures}
 
     \end{center}
+
+\end{frame}
+
+\begin{frame}
+    \frametitle{Empirical Validation [PyBullet Drones]}
+
+    \begin{center}
+        \includegraphics[width=.3\linewidth]{just.png}
+        \hfill
+        \includegraphics[width=.3\linewidth]{gate.png}
+    \end{center}
+
+    Two retrainable policies available at:
+    
+    {\tiny\url{https://github.com/phuongboi/drone-control-using-reinforcement-learning/tree/main}}
+
+    \begin{itemize}
+    \item Hover at fixed target position (started here)
+    \begin{itemize}
+        \item Modified to start at random positions and non-zero roll/pitch/yaw
+        \item Original authors defined ``failure'' (terminates episode early) as exceeding allowable roll/pitch/yaw or straying too far from the goal
+    \end{itemize}
+    \item Navigate through a ``gate'' (next up)
+    \end{itemize}
+
+\end{frame}
+
+\begin{frame}
+    \frametitle{PyBullet Drones: Blackbox Hover Performance}
+
+    \begin{center}
+        \includegraphics[width=.8\linewidth]{hfd.eps}
+    \end{center}
+
+    \begin{itemize}
+    \item ``Black box'' hover agent trained by PPO 
+    \item Performance can be improved with longer RL training, but some non-negligible failure is good for testing our approach
+    \item Collecting many rollouts for training WatchDog is a bottleneck
+    \end{itemize}
+
+\end{frame}
+
+\begin{frame}
+    \frametitle{Training $\mu$ for hover task}
+
+    \begin{center}
+        \includegraphics[width=1.\linewidth]{thr_results_800.eps}
+    \end{center}
+
+    \begin{itemize}
+    \item Room for better performance with more rollouts and bigger model
+    \item Trained with weighted cross entropy to correct class imbalance
+    \end{itemize}
 
 \end{frame}
 

@@ -1,5 +1,5 @@
 """
-Taken from 
+Based on 
 https://github.com/phuongboi/drone-control-using-reinforcement-learning/blob/main/ppo.py
 Which in turn was based on 
 https://github.com/nikhilbarhate99/PPO-PyTorch
@@ -31,6 +31,8 @@ class ActorCritic(nn.Module):
     def __init__(self, state_dim, action_dim, action_std_init):
         super(ActorCritic, self).__init__()
 
+        self.deterministic = (action_std_init == 0.)
+
         self.action_dim = action_dim
         self.action_var = torch.full((action_dim,), action_std_init * action_std_init).to(device)
         # actor
@@ -56,6 +58,9 @@ class ActorCritic(nn.Module):
 
 
     def act(self, state):
+        if self.deterministic:
+            return self.actor(state), None, None
+
         action_mean = self.actor(state)
         cov_mat = torch.diag(self.action_var).unsqueeze(dim=0)
         dist = MultivariateNormal(action_mean, cov_mat)

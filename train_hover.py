@@ -41,7 +41,7 @@ def train():
 
     ################ PPO hyperparameters ################
     #update_timestep = max_ep_len * 4      # update policy every n timesteps
-    max_training_timesteps = int(3e6)   # break training loop if timeteps > max_training_timesteps
+    max_training_timesteps = int(3e5)   # break training loop if timeteps > max_training_timesteps
     K_epochs = 80               # update policy for K epochs in one PPO update
 
     eps_clip = 0.2          # clip parameter for PPO
@@ -58,7 +58,7 @@ def train():
         os.mkdir(os.path.join(log_dir, str(run_num)))
     checkpoint_path = log_dir + "ppo_drone.pth"
 
-    print("current logging run number for " + " gym pybulet drone : ", run_num)
+    print("current logging run number for " + " gym pybullet drone : ", run_num)
     print("logging at : " + log_f_name)
     log_f = open(log_f_name,"w+")
     log_f.write('episode,timestep,reward\n')
@@ -69,7 +69,7 @@ def train():
     update_timestep = env.EPISODE_LEN_SEC*env.CTRL_FREQ * 4
     print_freq = env.EPISODE_LEN_SEC*env.CTRL_FREQ  * 10        # print avg reward in the interval (in num timesteps)
     log_freq =  env.EPISODE_LEN_SEC*env.CTRL_FREQ * 2
-    save_model_freq = int(1e5)          # save model frequency (in num timesteps)
+    save_model_freq = int(1e4)          # save model frequency (in num timesteps)
     # printing and logging variables
     print_running_reward = 0
     print_running_episodes = 0

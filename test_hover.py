@@ -41,7 +41,7 @@ def test():
     # action_std = 0.1            # set same std for action distribution which was used while saving
 
     max_ep_len = 1000           # max timesteps in one episode
-    action_std = 0.1            # set same std for action distribution which was used while saving
+    action_std = 0.0            # set same std for action distribution which was used while saving
 
     render = True              # render environment on screen
     frame_delay = 0             # if required; add delay b/w frames
@@ -57,7 +57,7 @@ def test():
 
     #####################################################
     DEFAULT_GUI = True
-    DEFAULT_RECORD_VIDEO = False
+    DEFAULT_RECORD_VIDEO = True
     DEFAULT_OUTPUT_FOLDER = 'results'
     DEFAULT_COLAB = False
 
@@ -93,7 +93,7 @@ def test():
     # checkpoint_path = "log_dir/4/4957_ppo_drone.pth" # hover at 0, 0 , 1
     # checkpoint_path = "log_dir/6/4436_ppo_drone.pth" # hover at 0, 0 , 1
     # checkpoint_path = "log_dir/hover_8/3277_ppo_drone.pth" # hover with some contrains 
-    checkpoint_path = "log_dir/hover_rand/1023_ppo_drone.pth" # hover with some contrains 
+    checkpoint_path = "log_dir/hover_rand/1824_ppo_drone.pth" # hover with some contrains 
     print("loading network from : " + checkpoint_path)
 
     ppo_agent.load(checkpoint_path)
