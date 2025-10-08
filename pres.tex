@@ -446,7 +446,7 @@ Broader context:
     \begin{itemize}
     \item ``Black box'' hover agent trained by PPO 
     \item Performance can be improved with longer RL training, but some non-negligible failure is good for testing our approach
-    \item Collecting many rollouts for training WatchDog is a bottleneck
+    \item Collecting many rollouts for training WatchDog is a bottleneck, up to 5K so far
     \end{itemize}
 
 \end{frame}
@@ -455,15 +455,53 @@ Broader context:
     \frametitle{Training $\mu$ for hover task}
 
     \begin{center}
-        \includegraphics[width=1.\linewidth]{thr_results_800.eps}
+    \end{center}
+
+    \begin{center}
+        \begin{tabular}{c|c|c}
+         & Predict Success & Predict Fail\\
+        \hline
+        Actual Success & 2760 (92\%) & 74 (2.5\%)\\
+        \hline
+        Actual Fail & 7 (0.23\%) & 159 (5.3\%)\\
+        \end{tabular}
+
+        \vspace{1em}
+
+        \includegraphics[width=1.\linewidth]{thr_results_5k.eps}
+
     \end{center}
 
     \begin{itemize}
-    \item Room for better performance with more rollouts and bigger model
+    \item Small MLP (497 parameters), 1600 training and 400 validation samples, 3K test/calibration
     \item Trained with weighted cross entropy to correct class imbalance
+    \item Room for better performance with more rollouts/bigger model
     \end{itemize}
 
 \end{frame}
+
+\begin{frame}
+    \frametitle{Empirical Validation [Hover]: Results for $t=0$}
+
+    $\text{Pr}(F_{>0}) \approx 5\%$, set $\delta = 2\%$, 99 calibration samples, 30 experimental repetitions (more needed for conclusive results)
+
+    \begin{center}
+        \begin{tabular}{c|c|c}
+         & Disengaged & Engaged\\
+        \hline
+        Failure & 1 (3.3\%) & \textcolor{blue}{0 (0\%)}\\
+        \hline
+        Success & \textcolor{red}{1 (3.3\%)} & 28 (93.3\%)\\
+        \end{tabular}
+
+        \includegraphics[width=.9\linewidth]{chr_tau.eps}
+
+        {\tiny $\tau=1$ when calibration data contains no failures}
+
+    \end{center}
+
+\end{frame}
+
 
 \begin{frame}
     \frametitle{Next Steps}

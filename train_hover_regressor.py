@@ -42,11 +42,11 @@ def train_regressor(model, optimizer, features, labels, num_train, num_valid, nu
 if __name__ == "__main__":
 
     do_train = False
-    num_train = 700 # number of samples for fitting only
-    num_valid = 100 # number of samples for testing only, leave some for calibration
+    num_train = 1600 # number of samples for fitting only
+    num_valid = 400 # number of samples for testing only, leave some for calibration
     num_updates = 20_000 # number of gradient updates
 
-    npz = np.load("hfd.npz")
+    npz = np.load("hfd_5k.npz")
     labels = npz["failures"]
     features = npz["init_obs"]
     npz.close()
@@ -55,7 +55,7 @@ if __name__ == "__main__":
 
     # MLP - same architecture as critic
     # num_hidden = 64 # same as critic
-    num_hidden = 12
+    num_hidden = 16
     regressor = tr.nn.Sequential(
         tr.nn.Linear(features.shape[-1], num_hidden),
         tr.nn.Tanh(),
@@ -88,6 +88,21 @@ if __name__ == "__main__":
     # apply sigmoids and flatten
     predictions = tr.sigmoid(predictions).flatten()
     predictions_early = tr.sigmoid(predictions_early).flatten()
+
+    test_preds = predictions_early[num_train+num_valid:].round().numpy()
+    test_labs = labels[num_train+num_valid:]
+
+    print(len(test_labs))
+
+    print(f"Test Accuracy = {(test_preds == test_labs).mean()}")
+    print(f"False positive rate = {(test_preds[test_labs == 0] == 1).mean()}")
+    print(f"False negative rate = {(test_preds[test_labs == 1] == 0).mean()}")
+
+    print("Confusion:")
+    print(f"TP = {((test_preds == 1) & (test_labs == 1)).sum()} ({((test_preds == 1) & (test_labs == 1)).mean()})")
+    print(f"FP = {(test_preds > test_labs).sum()} ({(test_preds > test_labs).mean()})")
+    print(f"TN = {((test_preds == 0) & (test_labs == 0)).sum()} ({((test_preds == 0) & (test_labs == 0)).mean()})")
+    print(f"FN = {(test_preds < test_labs).sum()} ({(test_preds < test_labs).mean()})")
 
     import matplotlib.pyplot as pt
 
@@ -129,6 +144,7 @@ if __name__ == "__main__":
     pt.legend()
     pt.xlabel("Sorted samples")
     pt.ylabel("Failure indicator")
+    pt.title("Predictions vs labels")
     pt.xscale("log")
 
     pt.tight_layout()
