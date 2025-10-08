@@ -30,7 +30,7 @@ def failure_function(env):
 
 
 #################################### Testing ###################################
-def collect_data(num_samples, save_period):
+def collect_data(num_samples, save_period, resume=False):
     print("============================================================================================")
 
     ################## hyperparameters ##################
@@ -71,10 +71,34 @@ def collect_data(num_samples, save_period):
 
     print("--------------------------------------------------------------------------------------------")
 
-    net_rewards = np.zeros(num_samples)
-    failures = np.zeros(num_samples, dtype=bool)
-    init_obs = np.empty((num_samples, state_dim))
-    for episode in range(num_samples):
+    if resume:
+
+        npz = np.load("hfd.npz")
+        old_net_rewards=npz["net_rewards"]
+        old_failures=npz["failures"]
+        old_init_obs=npz["init_obs"]
+        npz.close()
+
+        start_sample = len(old_failures)
+        num_samples = start_sample + num_samples
+
+        net_rewards = np.zeros(num_samples)
+        failures = np.zeros(num_samples, dtype=bool)
+        init_obs = np.empty((num_samples, state_dim))        
+
+        net_rewards[:start_sample] = old_net_rewards
+        failures[:start_sample] = old_failures
+        init_obs[:start_sample] = old_init_obs
+
+    else:
+
+        net_rewards = np.zeros(num_samples)
+        failures = np.zeros(num_samples, dtype=bool)
+        init_obs = np.empty((num_samples, state_dim))
+
+        start_sample = 0
+
+    for episode in range(start_sample, num_samples):
 
         obs, info = env.reset(seed=42, options={})
         init_obs[episode] = obs
@@ -116,11 +140,15 @@ def collect_data(num_samples, save_period):
 
 if __name__ == '__main__':
 
-    do_rollouts = False
-    num_samples = 5000
-    save_period = 50
+    do_rollouts = True
+    num_samples = 8000
+    save_period = 100
 
-    if do_rollouts: collect_data(num_samples, save_period)
+    if do_rollouts:
+        start_time = time.perf_counter()
+        collect_data(num_samples, save_period, resume=True)
+        total_time = time.perf_counter() - start_time
+        print(f"Total time = {total_time:.1f}, {total_time/num_samples:.2f} per sample")
 
     npz = np.load("hfd.npz")
     net_rewards=npz["net_rewards"]
