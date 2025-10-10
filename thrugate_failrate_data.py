@@ -12,20 +12,16 @@ import torch
 from ppo import PPO
 
 from gym_pybullet_drones.utils.Logger import Logger
-from RandomHoverAviary import RandomHoverAviary
+from RandomFlyThruGateAviary import RandomFlyThruGateAviary
 from gym_pybullet_drones.envs.MultiHoverAviary import MultiHoverAviary
 from gym_pybullet_drones.utils.utils import sync, str2bool
 from gym_pybullet_drones.utils.enums import ObservationType, ActionType
 
 def failure_function(env):
-    state = env._getDroneStateVector(0)
-    if (abs(state[0]) > 1.5 or abs(state[1]) > 1.5 or state[2] > 2.0 # Truncate when the drone is too far away
-         or abs(state[7]) > .4 or abs(state[8]) > .4 # Truncate when the drone is too tilted
-    ):
-        return True
-
-    else:
-        return False
+    dist = env.collision_distance()
+    return dist < .05
+    # print(f"dist = {dist}")
+    # return False
 
 
 
@@ -52,7 +48,7 @@ def collect_data(num_samples, save_period, resume=False):
     DEFAULT_OBS = ObservationType('kin') # 'kin' or 'rgb'
     DEFAULT_ACT = ActionType('rpm') # 'rpm' or 'pid' or 'vel' or 'one_d_rpm' or 'one_d_pid'
 
-    env = RandomHoverAviary(obs=DEFAULT_OBS,act=DEFAULT_ACT)
+    env = RandomFlyThruGateAviary(obs=DEFAULT_OBS,act=DEFAULT_ACT)
 
     # state space dimension
     state_dim = 12
@@ -64,7 +60,7 @@ def collect_data(num_samples, save_period, resume=False):
     ppo_agent = PPO(state_dim, action_dim, lr_actor, lr_critic, gamma, K_epochs, eps_clip, action_std_init=0.)
 
     # load checkpoint
-    checkpoint_path = "log_dir/hover_rand/1824_ppo_drone.pth"
+    checkpoint_path = "log_dir/thrugate/875_ppo_drone.pth"
     print("loading network from : " + checkpoint_path)
 
     ppo_agent.load(checkpoint_path)
@@ -73,7 +69,7 @@ def collect_data(num_samples, save_period, resume=False):
 
     if resume:
 
-        npz = np.load("hfd.npz")
+        npz = np.load("gfd.npz")
         old_net_rewards=npz["net_rewards"]
         old_failures=npz["failures"]
         old_init_obs=npz["init_obs"]
@@ -125,7 +121,7 @@ def collect_data(num_samples, save_period, resume=False):
 
         # save
         if (episode % save_period == 0) or (episode + 1 == num_samples):
-            np.savez_compressed("hfd.npz",
+            np.savez_compressed("gfd.npz",
                 net_rewards=net_rewards[:episode+1],
                 failures=failures[:episode+1],
                 init_obs=init_obs[:episode+1])
@@ -141,16 +137,17 @@ def collect_data(num_samples, save_period, resume=False):
 if __name__ == '__main__':
 
     do_rollouts = True
-    num_samples = 2000
-    save_period = 100
+    resume = True
+    num_samples = 340_000
+    save_period = 1000
 
     if do_rollouts:
         start_time = time.perf_counter()
-        collect_data(num_samples, save_period, resume=True)
+        collect_data(num_samples, save_period, resume)
         total_time = time.perf_counter() - start_time
         print(f"Total time = {total_time:.1f}, {total_time/num_samples:.2f} per sample")
 
-    npz = np.load("hfd.npz")
+    npz = np.load("gfd.npz")
     net_rewards=npz["net_rewards"]
     failures=npz["failures"]
     init_obs=npz["init_obs"]
@@ -165,7 +162,7 @@ if __name__ == '__main__':
     pt.ylabel("Frequency")
     pt.title(f"Reward distribution (failure rate = {100*failures.mean():.3f}%)")
     pt.tight_layout()
-    pt.savefig("hfd.eps")
+    pt.savefig("gfd.eps")
     pt.show()
 
 
