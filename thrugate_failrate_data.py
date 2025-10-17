@@ -136,8 +136,8 @@ def collect_data(num_samples, save_period, resume=False):
 
 if __name__ == '__main__':
 
-    do_rollouts = True
-    resume = True
+    do_rollouts = False
+    resume = False
     num_samples = 340_000
     save_period = 1000
 
