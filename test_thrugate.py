@@ -15,6 +15,7 @@ from RandomFlyThruGateAviary import RandomFlyThruGateAviary
 from gym_pybullet_drones.utils.utils import sync, str2bool
 from gym_pybullet_drones.utils.enums import ObservationType, ActionType
 
+from thrugate_failrate_data import failure_function
 
 #################################### Testing ###################################
 def test():
@@ -53,8 +54,8 @@ def test():
     lr_critic = 0.001           # learning rate for critic
 
     #####################################################
-    DEFAULT_GUI = True
-    DEFAULT_RECORD_VIDEO = False
+    DEFAULT_GUI = False
+    DEFAULT_RECORD_VIDEO = True
     DEFAULT_OUTPUT_FOLDER = 'results'
     DEFAULT_COLAB = False
 
@@ -88,7 +89,8 @@ def test():
 
     #checkpoint_path = "log_dir/5/3577_ppo_drone.pth"
     #checkpoint_path = "log_dir/6/4436_ppo_drone.pth"
-    checkpoint_path = "log_dir/thrugate/1152_ppo_drone.pth"
+    # checkpoint_path = "log_dir/thrugate/1152_ppo_drone.pth"
+    checkpoint_path = "log_dir/thrugate/875_ppo_drone.pth"
     print("loading network from : " + checkpoint_path)
 
     ppo_agent.load(checkpoint_path)
@@ -105,14 +107,21 @@ def test():
     ep_reward = 0
     start_time = datetime.now().replace(microsecond=0)
     start = time.time()
-    for i in range((env.EPISODE_LEN_SEC+20)*env.CTRL_FREQ):
+    failed = False
+    # for i in range((env.EPISODE_LEN_SEC+20)*env.CTRL_FREQ):
+    for i in range(env.EPISODE_LEN_SEC*env.CTRL_FREQ):
         action = ppo_agent.select_action(obs)
         action = np.expand_dims(action, axis=0)
         obs, reward, terminated, truncated, info = env.step(action)
         ep_reward += reward
         env.render()
-        sync(i, start, env.CTRL_TIMESTEP)
+        # sync(i, start, env.CTRL_TIMESTEP)
         if terminated:
+            break
+
+        failed = failure_function(env)
+        if failed:
+            print("Failed!")
             break
 
     # clear buffer
@@ -124,6 +133,8 @@ def test():
 
     env.close()
 
+    return failed
+
 # print("============================================================================================")
 #
 # avg_test_reward = test_running_reward / total_test_episodes
@@ -134,4 +145,12 @@ def test():
 
 
 if __name__ == '__main__':
-    test()
+    import itertools as it
+    for n in it.count():
+        failed = test()
+        if failed: break
+        print(f"trial {n}, did not fail yet")
+        # if n == 3: break
+
+    print(f"finally failed at {n}")
+

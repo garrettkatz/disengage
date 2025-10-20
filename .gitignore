@@ -1,6 +1,9 @@
 *~
 *.pkl
 __pycache__
+*.gif
+*.npz
+*.pt
 *.mp4
 *.lprof
 *.eps

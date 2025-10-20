@@ -41,12 +41,12 @@ def train_regressor(model, optimizer, features, labels, num_train, num_valid, nu
 
 if __name__ == "__main__":
 
-    do_train = True
+    do_train = False
     num_train = 1600 # number of samples for fitting only
     num_valid = 400 # number of samples for testing only, leave some for calibration
-    num_updates = 20_000 # number of gradient updates
+    num_updates = 40_000 # number of gradient updates
 
-    npz = np.load("gfd_340k.npz")
+    npz = np.load("gfd_345k.npz")
     labels = npz["failures"]
     features = npz["init_obs"]
     npz.close()
@@ -119,7 +119,7 @@ if __name__ == "__main__":
 
     pt.subplot(1,4,2)
     pt.scatter(labels[:num_train] + .01*np.random.randn(num_train), predictions[:num_train], marker=".", color='b')
-    pt.scatter(labels[num_train:] + .01*np.random.randn(len(labels)-num_train), predictions[num_train:], marker="+", color='r')
+    pt.scatter(labels[num_train:num_train+num_valid] + .01*np.random.randn(num_valid), predictions[num_train:num_train+num_valid], marker="+", color='r')
     pt.xlim([-0.5, 1.5])
     pt.ylim([-.1, 1.1])
     pt.legend(["Train","Validation"])
@@ -129,7 +129,7 @@ if __name__ == "__main__":
 
     pt.subplot(1,4,3)
     pt.scatter(labels[:num_train] + .01*np.random.randn(num_train), predictions_early[:num_train], marker=".", color="b")
-    pt.scatter(labels[num_train:] + .01*np.random.randn(len(labels)-num_train), predictions_early[num_train:], marker="+", color="r")
+    pt.scatter(labels[num_train:num_train+num_valid] + .01*np.random.randn(num_valid), predictions_early[num_train:num_train+num_valid], marker="+", color="r")
     pt.xlim([-0.5, 1.5])
     pt.ylim([-.1, 1.1])
     pt.legend(["Train","Validation"])
