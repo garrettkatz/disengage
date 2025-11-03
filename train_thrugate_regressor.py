@@ -106,7 +106,7 @@ if __name__ == "__main__":
 
     import matplotlib.pyplot as pt
 
-    pt.figure(figsize=(16,4))
+    pt.figure(figsize=(12,3))
 
     pt.subplot(1,4,1)
     pt.plot(lc["train"],"b-")
@@ -122,7 +122,7 @@ if __name__ == "__main__":
     pt.scatter(labels[num_train:num_train+num_valid] + .01*np.random.randn(num_valid), predictions[num_train:num_train+num_valid], marker="+", color='r')
     pt.xlim([-0.5, 1.5])
     pt.ylim([-.1, 1.1])
-    pt.legend(["Train","Validation"])
+    pt.legend(["Train","Validation"], loc="center right")
     pt.xlabel("Label")
     pt.ylabel("Prediction")
     pt.title("Final iteration performance")
@@ -132,7 +132,7 @@ if __name__ == "__main__":
     pt.scatter(labels[num_train:num_train+num_valid] + .01*np.random.randn(num_valid), predictions_early[num_train:num_train+num_valid], marker="+", color="r")
     pt.xlim([-0.5, 1.5])
     pt.ylim([-.1, 1.1])
-    pt.legend(["Train","Validation"])
+    # pt.legend(["Train","Validation"])
     pt.xlabel("Label")
     pt.ylabel("Prediction")
     pt.title(f"Early stop ({stop}) performance")
@@ -149,6 +149,7 @@ if __name__ == "__main__":
 
     pt.tight_layout()
     pt.savefig("ttr_results.eps")
+    pt.savefig("ttr_results.png")
     pt.show()
 
 

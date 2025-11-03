@@ -98,4 +98,5 @@ if __name__ == "__main__":
     pt.gcf().supylabel("Frequency")
     pt.tight_layout()
     pt.savefig("ctr_tau.eps")
+    pt.savefig("ctr_tau.png")
     pt.show()

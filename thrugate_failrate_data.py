@@ -156,13 +156,14 @@ if __name__ == '__main__':
     # print(init_obs)
 
     import matplotlib.pyplot as pt
-    pt.figure(figsize=(6,3))
+    pt.figure(figsize=(4.5,4))
     pt.hist(net_rewards, ec='k', fc=(.5,.5,1), bins=50)
     pt.xlabel("Net Reward")
     pt.ylabel("Frequency")
     pt.title(f"Reward distribution (failure rate = {100*failures.mean():.3f}%)")
     pt.tight_layout()
     pt.savefig("gfd.eps")
+    pt.savefig("gfd.png")
     pt.show()
 
 
