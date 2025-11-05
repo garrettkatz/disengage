@@ -1,9 +1,10 @@
 # from rl-baselines3-zoo/rl_zoo3
-# failure: either the first life is lost, or the aliens reach the bottom
+# failure: early termination, which indicates fall
 import argparse
 import importlib
 import os
 import sys
+from time import perf_counter
 
 import numpy as np
 import torch as th
@@ -19,18 +20,18 @@ from rl_zoo3.load_from_hub import download_from_hub
 from rl_zoo3.utils import StoreDict, get_model_path
 
 
-def enjoy(num_samples, save_period, resume) -> None:  # noqa: C901
+def enjoy(num_samples, save_period, resume, render) -> None:  # noqa: C901
     parser = argparse.ArgumentParser()
-    parser.add_argument("--env", help="environment ID", type=EnvironmentName, default="CartPole-v1")
+    parser.add_argument("--env", help="environment ID", type=EnvironmentName, default="Walker2DBulletEnv-v0")
     parser.add_argument("-f", "--folder", help="Log folder", type=str, default="rl-trained-agents")
-    parser.add_argument("--algo", help="RL Algorithm", default="ppo", type=str, required=False, choices=list(ALGOS.keys()))
+    parser.add_argument("--algo", help="RL Algorithm", default="ddpg", type=str, required=False, choices=list(ALGOS.keys()))
     parser.add_argument("-n", "--n-timesteps", help="number of timesteps", default=1000, type=int)
     parser.add_argument("--num-threads", help="Number of threads for PyTorch (-1 to use default)", default=-1, type=int)
     parser.add_argument("--n-envs", help="number of environments", default=1, type=int)
     parser.add_argument("--exp-id", help="Experiment ID (default: 0: latest, -1: no exp folder)", default=0, type=int)
     parser.add_argument("--verbose", help="Verbose mode (0: no output, 1: INFO)", default=1, type=int)
     parser.add_argument(
-        "--no-render", action="store_true", default=False, help="Do not render the environment (useful for tests)"
+        "--no-render", action="store_true", default=(not render), help="Do not render the environment (useful for tests)"
     )
     parser.add_argument("--deterministic", action="store_true", default=False, help="Use deterministic actions")
     parser.add_argument("--device", help="PyTorch device to be use (ex: cpu, cuda...)", default="auto", type=str)
@@ -82,10 +83,8 @@ def enjoy(num_samples, save_period, resume) -> None:  # noqa: C901
     for env_module in args.gym_packages:
         importlib.import_module(env_module)
 
-    # env_name: EnvironmentName = args.env
-    # algo = args.algo
-    env_name = EnvironmentName("SpaceInvadersNoFrameskip-v4")
-    algo = "dqn"
+    env_name: EnvironmentName = args.env
+    algo = args.algo
     folder = args.folder
 
     args.n_timesteps = 500
@@ -159,23 +158,20 @@ def enjoy(num_samples, save_period, resume) -> None:  # noqa: C901
     if args.env_kwargs is not None:
         env_kwargs.update(args.env_kwargs)
 
-    # introduce more randomness and difficulty
-    env_kwargs["repeat_action_probability"] = 0.0
-
     log_dir = args.reward_log if args.reward_log != "" else None
 
-    # env = create_test_env(
-    #     env_name.gym_id,
-    #     n_envs=args.n_envs,
-    #     stats_path=maybe_stats_path,
-    #     seed=args.seed,
-    #     log_dir=log_dir,
-    #     should_render=not args.no_render,
-    #     # should_render=False,
-    #     hyperparams=hyperparams,
-    #     env_kwargs=env_kwargs,
-    #     vec_env_cls=ExperimentManager.default_vec_env_cls,
-    # )
+    env = create_test_env(
+        env_name.gym_id,
+        n_envs=args.n_envs,
+        stats_path=maybe_stats_path,
+        seed=args.seed,
+        log_dir=log_dir,
+        should_render=not args.no_render,
+        # should_render=False,
+        hyperparams=hyperparams,
+        env_kwargs=env_kwargs,
+        vec_env_cls=ExperimentManager.default_vec_env_cls,
+    )
 
     kwargs = dict(seed=args.seed)
     if algo in off_policy_algos:
@@ -207,6 +203,10 @@ def enjoy(num_samples, save_period, resume) -> None:  # noqa: C901
 
     model = ALGOS[algo].load(model_path, custom_objects=custom_objects, device=args.device, **kwargs)
 
+    print("Model architecture:")
+    print(model.policy)
+    # input('..')
+
     # Uncomment to save patched file (for instance gym -> gymnasium)
     # model.save(model_path)
     # Patch VecNormalize (gym -> gymnasium)
@@ -217,11 +217,11 @@ def enjoy(num_samples, save_period, resume) -> None:  # noqa: C901
 
     # print(model.observation_space)
     # input('.')
-    state_dim = 1*84*84*4
+    state_dim = 23
 
     if resume:
 
-        npz = np.load("sifd.npz")
+        npz = np.load("wfd.npz")
         old_net_rewards=npz["net_rewards"]
         old_failures=npz["failures"]
         old_init_obs=npz["init_obs"]
@@ -248,19 +248,6 @@ def enjoy(num_samples, save_period, resume) -> None:  # noqa: C901
 
     for episode in range(start_sample, num_samples):
         print(f"\n ****** SAMPLE {episode} of {num_samples} ******\n")
-
-        env = create_test_env(
-            env_name.gym_id,
-            n_envs=args.n_envs,
-            stats_path=maybe_stats_path,
-            seed=args.seed,
-            log_dir=log_dir,
-            should_render=not args.no_render,
-            # should_render=False,
-            hyperparams=hyperparams,
-            env_kwargs=env_kwargs,
-            vec_env_cls=ExperimentManager.default_vec_env_cls,
-        )
 
         obs = env.reset()
         print('obs, init', obs.shape, obs.flatten().shape, init_obs.shape)
@@ -295,39 +282,22 @@ def enjoy(num_samples, save_period, resume) -> None:  # noqa: C901
                 obs, reward, done, infos = env.step(action)    
                 episode_start = done
 
-                lives = infos[0]['lives']
-                if lives < 3:
-                    failures[episode] = True
-                    print(" life lost")
-                    done = True
-    
                 if not args.no_render:
-                # if timestep % 10 == 0:
                     env.render("human")
     
                 episode_reward += reward[0]
                 ep_len += 1
+
+                if done:
+                    if ep_len < args.n_timesteps:
+                        failures[episode] = True
+                        print(f" Fall failure at {ep_len} timesteps")
 
                 # print(f" {timestep} [{episode_reward}] {ep_len}")
     
                 if done: net_rewards[episode] = episode_reward
     
                 if args.n_envs == 1:
-                    # For atari the return reward is not the atari score
-                    # so we have to get it from the infos dict
-                    if is_atari and infos is not None and args.verbose >= 1:
-                        episode_infos = infos[0].get("episode")
-                        if episode_infos is not None:
-                            # print(f"Atari Episode Score: {episode_infos['r']:.2f}")
-                            # print("Atari Episode Length", episode_infos["l"])
-                            # print(f"Episode Reward: {episode_reward:.2f}")
-                            # print("Episode Length", ep_len)
-                            # print("done", done)
-                            # input('.].')
-                            # this branch means aliens reached the bottom, also considered failure
-                            failures[episode] = True
-                            print(" aliens reached bottom")
-                            break
     
                     if done and not is_atari and args.verbose > 0:
                         # NOTE: for env using VecNormalize, the mean reward
@@ -357,11 +327,10 @@ def enjoy(num_samples, save_period, resume) -> None:  # noqa: C901
             pass
 
         print(f"episode reward = {episode_reward}, len = {ep_len}, failure = {failures[episode]}")
-        input('.')
 
         # save
         if (episode % save_period == 0) or (episode + 1 == num_samples):
-            np.savez_compressed("sifd.npz",
+            np.savez_compressed("wfd.npz",
                 net_rewards=net_rewards[:episode+1],
                 failures=failures[:episode+1],
                 init_obs=init_obs[:episode+1])
@@ -376,21 +345,23 @@ def enjoy(num_samples, save_period, resume) -> None:  # noqa: C901
         # if args.verbose > 0 and len(episode_lengths) > 0:
         #     print(f"Mean episode length: {np.mean(episode_lengths):.2f} +/- {np.std(episode_lengths):.2f}")
 
-        env.close()
-
-    # env.close()
+    env.close()
 
 if __name__ == "__main__":
 
     do_rollouts = True
-    num_samples = 10
-    resume = False
-    save_period = 10
+    render = False
+    num_samples = 320_990
+    resume = True
+    save_period = 100
 
     if do_rollouts:
-        enjoy(num_samples, save_period, resume)
+        start_time = perf_counter()
+        enjoy(num_samples, save_period, resume, render)
+        duration = perf_counter() - start_time
+        print(f"Took {duration}s, {duration / num_samples}s per sample")
 
-    npz = np.load("sifd.npz")
+    npz = np.load("wfd.npz")
     net_rewards=npz["net_rewards"]
     failures=npz["failures"]
     init_obs=npz["init_obs"]
@@ -404,9 +375,12 @@ if __name__ == "__main__":
     pt.xlabel("Net Reward")
     pt.ylabel("Frequency")
     pt.title(f"Reward distribution (failure rate = {100*failures.mean():.3f}%)")
+    pt.yscale("log")
     pt.tight_layout()
-    pt.savefig("sifd.eps")
-    pt.savefig("sifd.png")
+    pt.savefig("wfd.eps")
+    pt.savefig("wfd.png")
     pt.show()
+
+
 
 

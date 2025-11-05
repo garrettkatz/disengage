@@ -80,7 +80,7 @@ def collect_data(num_samples, save_period, resume=False):
 
         net_rewards = np.zeros(num_samples)
         failures = np.zeros(num_samples, dtype=bool)
-        init_obs = np.empty((num_samples, state_dim))        
+        init_obs = np.empty((num_samples, state_dim))
 
         net_rewards[:start_sample] = old_net_rewards
         failures[:start_sample] = old_failures
