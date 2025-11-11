@@ -5,6 +5,7 @@ import torch as tr
 if __name__ == "__main__":
 
     # these numbers specific to 10k sample (25% blackbox failrate) leaving 8k for calibration tests
+    # these numbers specific to 675K sample (25% blackbox failrate) leaving 8k for calibration tests
     num_train = 1600 # number of samples for fitting only
     num_valid = 400 # number of samples for testing only, leave some for calibration
     num_repetitions = 160 # number of reps

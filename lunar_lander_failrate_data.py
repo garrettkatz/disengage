@@ -351,9 +351,9 @@ if __name__ == "__main__":
 
     do_rollouts = True
     render = False
-    num_samples = 7980
+    num_samples = 664990
     resume = True
-    save_period = 10
+    save_period = 100
 
     if do_rollouts:
         start_time = perf_counter()

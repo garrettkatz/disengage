@@ -33,7 +33,44 @@ def train_regressor(model, optimizer, features, labels, num_train, num_valid, nu
                 min_valid_loss = loss
                 tr.save(model.state_dict(), checkpoint_path)
 
-        if update % max(1, num_updates // 100) == 0:
+        if update % max(1, num_updates // 10000) == 0:
+            print(f"{update} of {num_updates}: train|valid loss = {lc['train'][-1]:.5f} | {lc['valid'][-1]:.5f}")
+
+    return lc, all_logits
+
+def train_regressor_minibatch(model, optimizer, features, labels, num_train, num_valid, num_updates, checkpoint_path):
+
+    # resample for label imbalance
+    loss_fn = tr.nn.BCEWithLogitsLoss(pos_weight = (labels[:num_train]==0).sum() / (labels[:num_train]==1).sum())
+
+    min_valid_loss = tr.inf # for early stopping
+    lc = {"train":[], "valid":[]}
+
+    for update in range(num_updates):
+
+        i = update % num_train
+        logits = model(features[i:i+1])
+        targets = labels[i:i+1]
+        loss = loss_fn(logits, targets)
+        lc["train"].append(loss.item())
+
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        
+        with tr.no_grad():
+            all_logits = model(features)
+            logits = all_logits[num_train:num_train+num_valid]
+            targets = labels[num_train:num_train+num_valid]
+            loss = loss_fn(logits, targets)
+            lc["valid"].append(loss.item())
+
+            # early-stop checkpoint
+            if loss < min_valid_loss:
+                min_valid_loss = loss
+                tr.save(model.state_dict(), checkpoint_path)
+
+        if update % max(1, num_updates // 10000) == 0:
             print(f"{update} of {num_updates}: train|valid loss = {lc['train'][-1]:.5f} | {lc['valid'][-1]:.5f}")
 
     return lc, all_logits
@@ -42,11 +79,11 @@ def train_regressor(model, optimizer, features, labels, num_train, num_valid, nu
 if __name__ == "__main__":
 
     do_train = True
-    num_train = 1600 # number of samples for fitting only
-    num_valid = 400 # number of samples for testing only, leave some for calibration
-    num_updates = 40_000 # number of gradient updates
+    num_train = 19_500 # number of samples for fitting only
+    num_valid = 500 # number of samples for testing only, leave some for calibration
+    num_updates = 50_000 # number of gradient updates
 
-    npz = np.load("llfd.npz")
+    npz = np.load("llfd_675k.npz")
     labels = npz["failures"]
     features = npz["init_obs"]
     npz.close()
@@ -55,8 +92,8 @@ if __name__ == "__main__":
 
     # MLP - same architecture as critic
     # num_hidden = 64 # critic
-    # num_hidden = 8 # ~75% accuracy
-    num_hidden = 4 # ~75% accuracy with adamw weight decay .01, 75.9 with .1, 
+    num_hidden = 8 # ~75% accuracy
+    # num_hidden = 4 # ~75% accuracy with adamw weight decay .01, 75.9 with .1, 
     regressor = tr.nn.Sequential(
         tr.nn.Linear(in_features=8, out_features=num_hidden, bias=True),
         tr.nn.Tanh(),
@@ -69,13 +106,15 @@ if __name__ == "__main__":
 
     # opt = tr.optim.SGD(regressor.parameters(), lr=0.01)
     # opt = tr.optim.Adam(regressor.parameters(), lr=0.0001)
-    opt = tr.optim.AdamW(regressor.parameters(), lr=0.0001, weight_decay=.1)
+    # opt = tr.optim.AdamW(regressor.parameters(), lr=0.00005, weight_decay=.01)
+    opt = tr.optim.AdamW(regressor.parameters(), lr=0.01, weight_decay=.01)
 
     x = tr.tensor(features).float()
     y = tr.tensor(labels).reshape(-1, 1).float() # reshape for batch dimension
 
     if do_train:
-        lc, predictions = train_regressor(regressor, opt, x, y, num_train, num_valid, num_updates, "tllr_early.pt")
+        # lc, predictions = train_regressor(regressor, opt, x, y, num_train, num_valid, num_updates, "tllr_early.pt")
+        lc, predictions = train_regressor_minibatch(regressor, opt, x, y, num_train, num_valid, num_updates, "tllr_early.pt")
         with open("tllr_results.pkl","wb") as f:
             pk.dump((lc, predictions, labels), f)
 
