@@ -1,5 +1,6 @@
 # based on https://github.com/DLR-RM/rl-baselines3-zoo/blob/master/rl_zoo3/enjoy.py
 import os, sys, yaml
+from line_profiler import profile # python -m kernprof -lvr thisfile.py
 import numpy as np
 import torch as tr
 from huggingface_sb3 import EnvironmentName
@@ -140,6 +141,7 @@ def load(env, alg_name, render=False):
 
     return env, model
 
+# @profile
 def run(env, model, n_timesteps, failure_predicate, render=False, stochastic=False):
     deterministic = not stochastic
 
