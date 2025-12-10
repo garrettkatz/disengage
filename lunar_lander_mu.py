@@ -7,33 +7,34 @@ import sb_utils as su
 def failure_predicate(env, obs, reward, done, infos):
     return (reward[0] == -100)
 
+def setup_mu():
+    # MLP - same architecture as critic
+    num_hidden = 64
+    return tr.nn.Sequential(
+        tr.nn.Linear(in_features=8, out_features=num_hidden, bias=True),
+        tr.nn.Tanh(),
+        tr.nn.Linear(in_features=num_hidden, out_features=num_hidden, bias=True),
+        tr.nn.Tanh(),
+        tr.nn.Linear(in_features=num_hidden, out_features=1, bias=True),
+    )
+
 if __name__ == "__main__":
 
     env_name = "LunarLander-v3"
     alg_name = "a2c"
     num_timesteps = 1000
     prediction_window = 100
-    resume = False
+    resume = True
     do_training = True
     do_show = True
-    num_updates = 500
+    num_updates = 1000
     batch_size = 16
-    num_hidden = 64
     learning_rate = 0.0001
     report_period = 1
+    checkpoint_period = 100
     basename = "ll_mu"
 
-    # MLP - same architecture as critic
-    mu = tr.nn.Sequential(
-        tr.nn.Linear(in_features=8, out_features=num_hidden, bias=True),
-        # tr.nn.Tanh(),
-        tr.nn.LeakyReLU(),
-        tr.nn.Linear(in_features=num_hidden, out_features=num_hidden, bias=True),
-        # tr.nn.Tanh(),
-        tr.nn.LeakyReLU(),
-        tr.nn.Linear(in_features=num_hidden, out_features=1, bias=True),
-    )
-
+    mu = setup_mu()
     loss_fn = tr.nn.BCEWithLogitsLoss()
     optimizer = tr.optim.Adam(mu.parameters(), lr=learning_rate) # no overfit risk when always sampling new data?
 
@@ -114,6 +115,9 @@ if __name__ == "__main__":
                 tr.save(mu.state_dict(), f"{basename}.pt")
                 with open(f"{basename}.pkl","wb") as f:
                     pk.dump((failures, durations, losses, accuracies, probs, gradmaxs), f)
+
+            if update % checkpoint_period == 0:
+                tr.save(mu.state_dict(), f"{basename}_{update}.pt")
 
     if do_show:
 
