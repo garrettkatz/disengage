@@ -9,9 +9,11 @@ if __name__ == "__main__":
     env_name = "LunarLander-v3"
     alg_name = "a2c"
     num_timesteps = 1000
+    prediction_window = 50
     num_calibration = 100
     num_repetitions = 100
     basename = "ll_mu"
+    # checkpoints = [1900]
     checkpoints = list(range(100, 901, 100))
     delta = 0.05
     do_reps = False
@@ -68,7 +70,7 @@ if __name__ == "__main__":
                 failures[cp, rep] = failure
                 durations[cp, rep] = len(observations)
                 preempts[cp, rep] = (probs[:-1] > tau).any()
-                if preempts[cp, rep]: durations[cp, rep] = (probs[:-1] > tau).argmin()
+                if preempts[cp, rep]: durations[cp, rep] = (probs[:-1] > tau).to(int).argmax()
                 taus[cp, rep] = tau
                 np.savez("llp.npz", failures=failures, preempts=preempts, durations=durations, taus=taus)
                 print(f"chkpt {checkpoint_num}, rep {rep} of {num_repetitions}: failure={failures[cp, rep]}, preempt={preempts[cp, rep]}, dur={durations[cp, rep]}, tau={taus[cp, rep]}")
@@ -78,9 +80,10 @@ if __name__ == "__main__":
     if do_show:
 
         # get original failure rate
-        with open(f"{basename}.pkl","rb") as f:
+        with open(f"{basename}_H{prediction_window}.pkl","rb") as f:
             (failures, _, _, _, _, _) = pk.load(f)
         failrate = np.mean(failures)
+        print(f"original failrate {failrate}")
 
         # get preemption data
         npz = np.load("llp.npz")
@@ -93,16 +96,23 @@ if __name__ == "__main__":
         for cp, checkpoint_num in enumerate(checkpoints):
             print(f"chkpt {checkpoint_num}: {preempts[cp].mean()} preemption [vs {delta / failrate}], {(failures & ~preempts)[cp].mean()} failure")
 
+        fig = pt.figure(figsize=(6,3))
+
         pt.subplot(1,2,1)
-        pt.plot(checkpoints, preempts.mean(axis=1), label="preemption")
-        pt.plot(checkpoints, (failures & ~preempts).mean(axis=1), label="failure")
-        pt.xticks(checkpoints)
+        pt.plot(checkpoints, preempts.mean(axis=1), "go-", label="disengage")
+        pt.plot(checkpoints, (failures & ~preempts).mean(axis=1), "rx-", label="failure")
+        pt.plot(checkpoints, [delta]*len(checkpoints), 'k:', label="delta")
+        pt.xticks(checkpoints, rotation=45)
+        pt.xlabel("Checkpoint")
         pt.ylabel("Rates")
         pt.legend()
 
         pt.subplot(1,2,2)
-        for t in taus:
-            pt.hist(t, alpha=.5)
-        pt.xlabel("tau")
-        pt.ylabel("count")
+        for checkpoint_num, t in zip(checkpoints, taus):
+            pt.plot(checkpoint_num + 5*np.random.randn(num_repetitions), t, 'k.')
+        pt.xlabel("Checkpoint")
+        pt.ylabel("$\\tau$")
+
+        pt.tight_layout()
+        pt.savefig("llp.eps")
         pt.show()

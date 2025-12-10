@@ -1,4 +1,5 @@
 from line_profiler import profile # python -m kernprof -lvr thisfile.py
+from time import perf_counter
 import pickle as pk
 import numpy as np
 import torch as tr
@@ -23,11 +24,11 @@ if __name__ == "__main__":
     env_name = "LunarLander-v3"
     alg_name = "a2c"
     num_timesteps = 1000
-    prediction_window = 100
+    prediction_window = 50
     resume = True
     do_training = True
     do_show = True
-    num_updates = 1000
+    num_updates = 9500
     batch_size = 16
     learning_rate = 0.0001
     report_period = 1
@@ -40,8 +41,10 @@ if __name__ == "__main__":
 
     if resume:
 
-        mu.load_state_dict(tr.load(f"{basename}.pt", weights_only=True))
-        with open(f"{basename}.pkl","rb") as f:
+        resume_data = tr.load(f"{basename}_H{prediction_window}.pt", weights_only=True)
+        mu.load_state_dict(resume_data['mu'])
+        optimizer.load_state_dict(resume_data['opt'])
+        with open(f"{basename}_H{prediction_window}.pkl","rb") as f:
             (failures, durations, losses, accuracies, probs, gradmaxs) = pk.load(f)
 
         start_update = len(losses)
@@ -60,6 +63,7 @@ if __name__ == "__main__":
     if do_training:
 
         env, model = su.load(env_name, alg_name)
+        start_loop = perf_counter()
         for update in range(start_update, num_updates):
     
             # collect a batch
@@ -111,30 +115,62 @@ if __name__ == "__main__":
                 failrate = np.mean(failures)
                 failtime = np.mean([d for (d,f) in zip(durations, failures) if f])
                 print(f"{update=} of {num_updates}: {failrate=:.3f}, {failtime=:.1f}, {loss=:.3f}, {correct=:.3f}, probs={probs[-1]:.3f}, |grad|<={gradmaxs[-1]:.5f}")
-    
-                tr.save(mu.state_dict(), f"{basename}.pt")
-                with open(f"{basename}.pkl","wb") as f:
+
+
+                # save latest model and optimizer for resuming later, along with metrics so far
+                tr.save({
+                    'mu': mu.state_dict(),
+                    'opt': optimizer.state_dict(),
+                }, f"{basename}_H{prediction_window}.pt")
+                with open(f"{basename}_H{prediction_window}.pkl","wb") as f:
                     pk.dump((failures, durations, losses, accuracies, probs, gradmaxs), f)
 
-            if update % checkpoint_period == 0:
-                tr.save(mu.state_dict(), f"{basename}_{update}.pt")
+            if (update+1) % checkpoint_period == 0:
+                tr.save(mu.state_dict(), f"{basename}_H{prediction_window}_{update+1}.pt")
+                with open(f"{basename}_H{prediction_window}_{update+1}.pkl","wb") as f:
+                    pk.dump((failures, durations, losses, accuracies, probs, gradmaxs), f)
+
+        total_time = perf_counter() - start_loop
+        print(f"{total_time:.3f} seconds, {total_time / (num_updates - start_update):.3f} per update")
 
     if do_show:
 
-        with open(f"{basename}.pkl","rb") as f:
+        with open(f"{basename}_H{prediction_window}.pkl","rb") as f:
             (failures, durations, losses, accuracies, probs, gradmaxs) = pk.load(f)
     
         import matplotlib.pyplot as pt
-        pt.subplot(1,4,1)
-        pt.plot(losses)
-        pt.title("losses")
-        pt.subplot(1,4,2)
-        pt.plot(accuracies)
-        pt.title("accuracies")
-        pt.subplot(1,4,3)
-        pt.plot(probs)
-        pt.title("probs")
-        pt.subplot(1,4,4)
-        pt.plot(gradmaxs)
-        pt.title("gradmaxs")
+        window = 50
+        fig = pt.figure(figsize=(6,3))
+
+        pt.subplot(1,3,1)
+        pt.plot(losses, '-', c=(.8,.8,.8))
+        pt.plot(np.arange(0, len(losses), window), np.array(losses).reshape(-1,window).mean(axis=1), 'k-')
+        pt.ylabel("Metric")
+        pt.title("Loss")
+
+        pt.subplot(1,3,2)
+        pt.plot(accuracies, '-', c=(.8,.8,.8))
+        pt.plot(np.arange(0, len(accuracies), window), np.array(accuracies).reshape(-1,window).mean(axis=1), 'k-')
+        pt.title("Accuracy")
+
+        pt.subplot(1,3,3)
+        pt.plot(gradmaxs, '-', c=(.8,.8,.8))
+        pt.plot(np.arange(0, len(gradmaxs), window), np.array(gradmaxs).reshape(-1,window).mean(axis=1), 'k-')
+        pt.title("Gradient norm")
+
+        fig.supxlabel("Parameter update")
+        pt.tight_layout()
+        pt.savefig("ll_mu.eps")
         pt.show()
+
+
+        # pt.subplot(4,1,2)
+        # pt.plot(accuracies)
+        # pt.title("accuracies")
+        # pt.subplot(4,1,3)
+        # pt.plot(probs)
+        # pt.title("probs")
+        # pt.subplot(4,1,4)
+        # pt.plot(gradmaxs)
+        # pt.title("gradmaxs")
+        # pt.show()
