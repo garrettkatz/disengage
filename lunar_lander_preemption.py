@@ -13,10 +13,9 @@ if __name__ == "__main__":
     num_calibration = 100
     num_repetitions = 100
     basename = "ll_mu"
-    # checkpoints = [1900]
-    checkpoints = list(range(100, 901, 100))
+    checkpoints = [500, 1000, 1500, 2000]
     delta = 0.05
-    do_reps = False
+    do_reps = True
     do_show = True
 
     if do_reps:
@@ -36,7 +35,7 @@ if __name__ == "__main__":
     
             # load checkpoint
             mu = setup_mu()
-            mu.load_state_dict(tr.load(f"{basename}_{checkpoint_num}.pt", weights_only=True))
+            mu.load_state_dict(tr.load(f"{basename}_H{prediction_window}_{checkpoint_num}.pt", weights_only=True))
     
             # experimental repetitions to estimate preemption failure rate
             for rep in range(num_repetitions):
@@ -72,7 +71,7 @@ if __name__ == "__main__":
                 preempts[cp, rep] = (probs[:-1] > tau).any()
                 if preempts[cp, rep]: durations[cp, rep] = (probs[:-1] > tau).to(int).argmax()
                 taus[cp, rep] = tau
-                np.savez("llp.npz", failures=failures, preempts=preempts, durations=durations, taus=taus)
+                np.savez(f"llp_H{prediction_window}_{checkpoint_num}.npz", failures=failures[cp], preempts=preempts[cp], durations=durations[cp], taus=taus[cp])
                 print(f"chkpt {checkpoint_num}, rep {rep} of {num_repetitions}: failure={failures[cp, rep]}, preempt={preempts[cp, rep]}, dur={durations[cp, rep]}, tau={taus[cp, rep]}")
 
             print(f"chkpt {checkpoint_num}: {preempts[cp].mean()} preemption, {(failures & ~preempts)[cp].mean()} failure")
@@ -86,15 +85,20 @@ if __name__ == "__main__":
         print(f"original failrate {failrate}")
 
         # get preemption data
-        npz = np.load("llp.npz")
-        failures = npz["failures"]
-        preempts = npz["preempts"]
-        taus = npz["taus"]
-
-        import matplotlib.pyplot as pt
+        failures = np.empty((len(checkpoints), num_repetitions), dtype=bool)
+        preempts = np.empty((len(checkpoints), num_repetitions), dtype=bool)
+        durations = np.empty((len(checkpoints), num_repetitions), dtype=int)
+        taus = np.empty((len(checkpoints), num_repetitions))
 
         for cp, checkpoint_num in enumerate(checkpoints):
-            print(f"chkpt {checkpoint_num}: {preempts[cp].mean()} preemption [vs {delta / failrate}], {(failures & ~preempts)[cp].mean()} failure")
+            npz = np.load(f"llp_H{prediction_window}_{checkpoint_num}.npz")
+            failures[cp] = npz["failures"]
+            preempts[cp] = npz["preempts"]
+            durations[cp] = npz["durations"]
+            taus[cp] = npz["taus"]
+            print(f"chkpt {checkpoint_num}: {preempts[cp].mean():.3f} preemption, {(failures[cp] & ~preempts[cp]).mean():.3f} failure")
+
+        import matplotlib.pyplot as pt
 
         fig = pt.figure(figsize=(6,3))
 

@@ -43,6 +43,15 @@ class FlyThruRuinsAviary(BaseRLAviary):
 
     ################################################################################
 
+    def set_camera(self):
+        # good for hand-placed walls
+        p.resetDebugVisualizerCamera(
+            cameraDistance=3,
+            cameraYaw=-152,
+            cameraPitch=-71,
+            cameraTargetPosition=[-.2,-.77,.17])
+
+
     def __init__(self,
                  drone_model: DroneModel=DroneModel.CF2X,
                  initial_xyzs=None,
@@ -104,8 +113,7 @@ class FlyThruRuinsAviary(BaseRLAviary):
         self.base_rpys = self.INIT_RPYS.copy()
         self.buggy = buggy
 
-        # # ground
-        # self.obstacle_ids.append(add_box((0,0,0), (0,0,0,1), (100, 100, .02), (150/255,75/255,0), mass=0))
+        self.set_camera()
 
     def reset(self,
               seed : int = None,
@@ -118,8 +126,19 @@ class FlyThruRuinsAviary(BaseRLAviary):
         self.INIT_RPYS = self.base_rpys + np.random.uniform(-.1, .1, self.base_rpys.shape)
         # print(self.INIT_XYZS)
         # input('.')
-        return super().reset(seed, options)
 
+        self.set_camera()
+
+        result = super().reset(seed, options)
+
+        # goal position
+        p.addUserDebugPoints(
+            pointPositions = [(0., -2., 0.75)],
+            pointColorsRGB = [(0., 1., 0.)],
+            pointSize = 10.,
+        )
+
+        return result
 
     ################################################################################
 
@@ -127,16 +146,34 @@ class FlyThruRuinsAviary(BaseRLAviary):
         """Add obstacles to the environment. Designed to be like walls of ruins.
         """
 
-        rng = np.random.default_rng(seed=12345) # keep object locations constant across runs for now
-
         half_extents = (.25, .01, .75)
         rgb = (.5, .5, .5)
         self.obstacle_ids = []
-        for wall in range(self.num_walls):
-            position = rng.uniform([-1, .5, .75], [1, 1.3, .75])
-            angle = rng.uniform(-3.14, 3.14)
+
+        # # random wall placement
+        # rng = np.random.default_rng(seed=12345) # keep object locations constant across runs for now
+        # for wall in range(self.num_walls):
+        #     position = rng.uniform([-1, .5, .75], [1, 1.3, .75])
+        #     angle = rng.uniform(-3.14, 3.14)
+        #     quaternion = p.getQuaternionFromEuler((0,0,angle))
+        #     self.obstacle_ids.append(add_box(position, quaternion, half_extents, rgb, mass=0))
+
+        # hand-placed walls
+        positions_angles = [
+            ((.2, -.4, .75), .2),
+            ((.4, -.3, .75), .1),
+            ((-.3, -1, .75), -.4),
+            ((-.5, -.8, .75), -.6),
+            ((-.7, -.7, .75), -.3),
+            ((.8, -1.4, .75), .2),
+            ((1, -1.3, .75), .1),
+        ]
+        for (position, angle) in positions_angles:
             quaternion = p.getQuaternionFromEuler((0,0,angle))
             self.obstacle_ids.append(add_box(position, quaternion, half_extents, rgb, mass=0))
+
+        # sandy ground
+        self.obstacle_ids.append(add_box((0,0,0), (0,0,0,1), (100, 100, .02), (246/255, 215/255, 176/255), mass=0))
 
     def collision_distance(self):
         drone_id = self.DRONE_IDS[0]
@@ -151,7 +188,7 @@ class FlyThruRuinsAviary(BaseRLAviary):
 
     def failure_predicate(self):
         dist = self.collision_distance()
-        return dist < .025
+        return dist < .01
 
 
     ################################################################################
@@ -170,7 +207,7 @@ class FlyThruRuinsAviary(BaseRLAviary):
         reward = max(0, 1 - np.linalg.norm(np.array([0, -2*norm_ep_time, 0.75])-state[0:3]))
 
         failure = self.failure_predicate()
-        if failure: reward -= 100
+        if failure: reward -= 1
 
         return reward
 
@@ -190,6 +227,7 @@ class FlyThruRuinsAviary(BaseRLAviary):
         ):
             return True
         if self.step_counter/self.PYB_FREQ > self.EPISODE_LEN_SEC:
+            print("out of time")
             return True
         else:
             return False
@@ -323,8 +361,20 @@ class FlyThruRuinsAviary(BaseRLAviary):
             print("[WARNING] it", self.step_counter, "in FlyThruGateAviary._clipAndNormalizeState(), clipped z velocity [{:.2f}]".format(state[12]))
 
 if __name__ == "__main__":
+
     env = FlyThruRuinsAviary(gui=True, num_walls=7)
     input('.')
+
+    # env.reset()
+    # while True:
+    #     action = np.random.randn(1,4)
+    #     obs, reward, terminated, truncated, info = env.step(action)
+    #     done = terminated or truncated
+    #     print(reward)
+    #     input('.')
+    #     if done:
+    #         print(terminated, truncated)
+    #         break
 
 
 

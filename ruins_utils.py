@@ -1,0 +1,122 @@
+"""
+Adapted from 
+https://github.com/phuongboi/drone-control-using-reinforcement-learning/blob/da52ed17e0bc1923a1f0eb7d7d2cecdf01aec4f9/test_thrugate.py
+"""
+import os
+import time
+from datetime import datetime
+
+import numpy as np
+import torch as tr
+
+from gym_pybullet_drones.utils.Logger import Logger
+from FlyThruRuinsAviary import FlyThruRuinsAviary
+from gym_pybullet_drones.utils.utils import sync, str2bool
+from gym_pybullet_drones.utils.enums import ObservationType, ActionType
+from ppo import PPO
+
+def load(checkpoint_name, render=False):
+
+    ################## hyperparameters ##################
+
+    action_std = 0.1            # set same std for action distribution which was used while saving
+    K_epochs = 80               # update policy for K epochs
+    eps_clip = 0.2              # clip parameter for PPO
+    gamma = 0.99                # discount factor
+    lr_actor = 0.0003           # learning rate for actor
+    lr_critic = 0.001           # learning rate for critic
+
+    #####################################################
+    DEFAULT_GUI = render
+    DEFAULT_RECORD_VIDEO = False
+    DEFAULT_OUTPUT_FOLDER = 'results'
+
+    DEFAULT_OBS = ObservationType('kin') # 'kin' or 'rgb'
+    DEFAULT_ACT = ActionType('rpm') # 'rpm' or 'pid' or 'vel' or 'one_d_rpm' or 'one_d_pid'
+    filename = os.path.join(DEFAULT_OUTPUT_FOLDER, 'recording_'+datetime.now().strftime("%m.%d.%Y_%H.%M.%S"))
+    if not os.path.exists(filename):
+        print(filename)
+        os.makedirs(filename+'/')
+
+    env = FlyThruRuinsAviary(gui=DEFAULT_GUI,
+                           obs=DEFAULT_OBS,
+                           act=DEFAULT_ACT,
+                           # record=DEFAULT_RECORD_VIDEO,
+                           )
+
+    # state space dimension
+    state_dim = 12
+
+    # action space dimension
+    action_dim = 4
+
+    # initialize a PPO agent
+    ppo_agent = PPO(state_dim, action_dim, lr_actor, lr_critic, gamma, K_epochs, eps_clip, action_std)
+
+    # load pretrained weights
+    checkpoint_path = f"ruins_log_dir/ruins/{checkpoint_name}.pth"
+    print("loading network from : " + checkpoint_path)
+    ppo_agent.load(checkpoint_path)
+
+    return env, ppo_agent
+
+# @profile
+def run(env, ppo_agent, render=False):
+
+    # obs, info = env.reset(seed=42, options={})
+    obs, info = env.reset()
+
+    observations = [obs]
+    actions = []
+
+    ep_rew = ep_len = 0
+    start_time = datetime.now().replace(microsecond=0)
+    start = time.time()
+    failed = False
+
+    # for i in range((env.EPISODE_LEN_SEC+20)*env.CTRL_FREQ):
+    for i in range(env.EPISODE_LEN_SEC*env.CTRL_FREQ):
+        ep_len += 1
+
+        with tr.no_grad():
+            action = ppo_agent.select_action(obs)
+
+        action = np.expand_dims(action, axis=0)
+        obs, reward, terminated, truncated, info = env.step(action)
+        failed = env.failure_predicate()
+        ep_rew += reward
+
+        observations.append(obs)
+        actions.append(action)
+
+        # print(f"timestep {i}: net reward = {ep_rew:.3f}, {terminated=}, {truncated=}, {failed=}")
+
+        if render:
+            env.render()
+            sync(i, start, env.CTRL_TIMESTEP)
+
+        if failed:
+            # print("Failed!")
+            break
+
+        if terminated or truncated:
+            break
+
+    # clear buffer
+    ppo_agent.buffer.clear()
+
+    return failed, ep_rew, ep_len, observations, actions
+
+if __name__ == "__main__":
+    # model, _ = load_model("a2c", "LunarLander-v3")
+
+    render = True
+
+    env, model = load("12144_ppo_drone", render)
+    print(env)
+    print(model)
+
+    failure, ep_rew, ep_len, observations, actions = run(env, model, render)
+
+    input(f"{failure=:b}")
+

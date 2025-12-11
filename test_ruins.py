@@ -1,0 +1,140 @@
+"""
+Adapted from 
+https://github.com/phuongboi/drone-control-using-reinforcement-learning/blob/da52ed17e0bc1923a1f0eb7d7d2cecdf01aec4f9/test_thrugate.py
+"""
+import os
+import time
+from datetime import datetime
+import argparse
+import gymnasium as gym
+import numpy as np
+import torch
+from ppo import PPO
+
+from gym_pybullet_drones.utils.Logger import Logger
+from FlyThruRuinsAviary import FlyThruRuinsAviary
+from gym_pybullet_drones.utils.utils import sync, str2bool
+from gym_pybullet_drones.utils.enums import ObservationType, ActionType
+
+from ruins_utils import load, run
+
+def test(checkpoint_name, render):
+
+    env, model = load(checkpoint_name, render)
+    failure, ep_rew, ep_len, observations, actions = run(env, model, render)
+    return failure
+
+    # print("============================================================================================")
+
+    # ################## hyperparameters ##################
+
+    # max_ep_len = 1000           # max timesteps in one episode
+    # action_std = 0.1            # set same std for action distribution which was used while saving
+
+    # frame_delay = 0             # if required; add delay b/w frames
+
+    # K_epochs = 80               # update policy for K epochs
+    # eps_clip = 0.2              # clip parameter for PPO
+    # gamma = 0.99                # discount factor
+
+    # lr_actor = 0.0003           # learning rate for actor
+    # lr_critic = 0.001           # learning rate for critic
+
+    # #####################################################
+    # DEFAULT_GUI = render
+    # DEFAULT_RECORD_VIDEO = False
+    # DEFAULT_OUTPUT_FOLDER = 'results'
+
+    # DEFAULT_OBS = ObservationType('kin') # 'kin' or 'rgb'
+    # DEFAULT_ACT = ActionType('rpm') # 'rpm' or 'pid' or 'vel' or 'one_d_rpm' or 'one_d_pid'
+    # filename = os.path.join(DEFAULT_OUTPUT_FOLDER, 'recording_'+datetime.now().strftime("%m.%d.%Y_%H.%M.%S"))
+    # if not os.path.exists(filename):
+    #     print(filename)
+    #     os.makedirs(filename+'/')
+
+    # env = FlyThruRuinsAviary(gui=DEFAULT_GUI,
+    #                        obs=DEFAULT_OBS,
+    #                        act=DEFAULT_ACT,
+    #                        # record=DEFAULT_RECORD_VIDEO,
+    #                        )
+
+    # # state space dimension
+    # state_dim = 12
+
+    # # action space dimension
+
+    # action_dim = 4
+
+    # # initialize a PPO agent
+    # ppo_agent = PPO(state_dim, action_dim, lr_actor, lr_critic, gamma, K_epochs, eps_clip, action_std)
+
+    # # preTrained weights directory
+
+    # random_seed = 0             #### set this to load a particular checkpoint trained on random seed
+    # run_num_pretrained = 0      #### set this to load a particular checkpoint num
+
+
+    # checkpoint_path = f"ruins_log_dir/ruins/{checkpoint_name}.pth"
+    # print("loading network from : " + checkpoint_path)
+
+    # ppo_agent.load(checkpoint_path)
+
+    # print("--------------------------------------------------------------------------------------------")
+
+    # test_running_reward = 0
+
+    # # obs, info = env.reset(seed=42, options={})
+    # obs, info = env.reset()
+    # ep_reward = 0
+    # start_time = datetime.now().replace(microsecond=0)
+    # start = time.time()
+    # failed = False
+    # # for i in range((env.EPISODE_LEN_SEC+20)*env.CTRL_FREQ):
+    # for i in range(env.EPISODE_LEN_SEC*env.CTRL_FREQ):
+    #     action = ppo_agent.select_action(obs)
+    #     action = np.expand_dims(action, axis=0)
+    #     obs, reward, terminated, truncated, info = env.step(action)
+    #     failed = env.failure_predicate()
+    #     ep_reward += reward
+
+    #     print(f"timestep {i}: net reward = {ep_reward:.3f}, {terminated=}, {truncated=}, {failed=}")
+
+    #     env.render()
+    #     sync(i, start, env.CTRL_TIMESTEP)
+
+    #     if terminated or truncated:
+    #         break
+
+    #     if failed:
+    #         print("Failed!")
+    #         break
+
+
+    # # clear buffer
+    # ppo_agent.buffer.clear()
+
+    # test_running_reward +=  ep_reward
+    # print('Episode: {} \t\t Reward: {}'.format(0, round(ep_reward, 2)))
+    # ep_reward = 0
+
+    # env.close()
+
+    # return failed
+
+
+
+if __name__ == '__main__':
+
+    import itertools as it
+    for n in it.count():
+
+        # failed = test("3958_ppo_drone", render=True)
+        failed = test("12921_ppo_drone", render=True)
+        if failed: break
+        print(f"trial {n}, did not fail yet")
+        if n == 0: break
+
+    print(f"finally failed at {n}")
+
+
+

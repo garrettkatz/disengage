@@ -3,16 +3,13 @@ from time import perf_counter
 import pickle as pk
 import numpy as np
 import torch as tr
-import sb_utils as su
-
-def failure_predicate(env, obs, reward, done, infos):
-    return (reward[0] == -100)
+import ruins_utils as ru
 
 def setup_mu():
     # MLP - same architecture as critic
-    num_hidden = 256
+    num_hidden = 64
     return tr.nn.Sequential(
-        tr.nn.Linear(in_features=8, out_features=num_hidden, bias=True),
+        tr.nn.Linear(in_features=12, out_features=num_hidden, bias=True),
         tr.nn.Tanh(),
         tr.nn.Linear(in_features=num_hidden, out_features=num_hidden, bias=True),
         tr.nn.Tanh(),
@@ -21,10 +18,8 @@ def setup_mu():
 
 if __name__ == "__main__":
 
-    env_name = "LunarLander-v3"
-    alg_name = "a2c"
-    num_timesteps = 1000
-    prediction_window = 50
+    policy_checkpoint_name = "12144_ppo_drone"
+    prediction_window = 24 # 0.1 of 240 timesteps per episode
     resume = False
     do_training = True
     do_show = True
@@ -33,7 +28,7 @@ if __name__ == "__main__":
     learning_rate = 0.0001
     report_period = 1
     checkpoint_period = 100
-    basename = "ll_mu"
+    basename = "ruins_mu"
 
     mu = setup_mu()
     loss_fn = tr.nn.BCEWithLogitsLoss()
@@ -62,7 +57,7 @@ if __name__ == "__main__":
 
     if do_training:
 
-        env, model = su.load(env_name, alg_name)
+        env, model = ru.load(policy_checkpoint_name, render=False)
         start_loop = perf_counter()
         for update in range(start_update, num_updates):
     
@@ -72,7 +67,7 @@ if __name__ == "__main__":
             for example in range(batch_size):
     
                 # run an episode
-                failure, _, _, observations, _ = su.run(env, model, num_timesteps, failure_predicate)
+                failure, _, _, observations, _ = ru.run(env, model, render=False)
     
                 # save failure indicators and times
                 failures.append(failure)
@@ -174,3 +169,5 @@ if __name__ == "__main__":
         # pt.plot(gradmaxs)
         # pt.title("gradmaxs")
         # pt.show()
+
+
