@@ -7,7 +7,7 @@ import ruins_utils as ru
 
 def setup_mu():
     # MLP - same architecture as critic
-    num_hidden = 64
+    num_hidden = 256
     return tr.nn.Sequential(
         tr.nn.Linear(in_features=12, out_features=num_hidden, bias=True),
         tr.nn.Tanh(),
@@ -18,12 +18,12 @@ def setup_mu():
 
 if __name__ == "__main__":
 
-    policy_checkpoint_name = "12144_ppo_drone"
+    policy_checkpoint_name = "23087_ppo_drone"
     prediction_window = 24 # 0.1 of 240 timesteps per episode
     resume = False
     do_training = True
     do_show = True
-    num_updates = 2000
+    num_updates = 500
     batch_size = 16
     learning_rate = 0.0001
     report_period = 1

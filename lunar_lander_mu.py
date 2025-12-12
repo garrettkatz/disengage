@@ -24,11 +24,11 @@ if __name__ == "__main__":
     env_name = "LunarLander-v3"
     alg_name = "a2c"
     num_timesteps = 1000
-    prediction_window = 50
-    resume = False
+    prediction_window = 25
+    resume = True
     do_training = True
     do_show = True
-    num_updates = 2000
+    num_updates = 500
     batch_size = 16
     learning_rate = 0.0001
     report_period = 1

@@ -89,9 +89,8 @@ def run(env, ppo_agent, render=False):
         observations.append(obs)
         actions.append(action)
 
-        # print(f"timestep {i}: net reward = {ep_rew:.3f}, {terminated=}, {truncated=}, {failed=}")
-
         if render:
+            print(f"timestep {i}: net reward = {ep_rew:.3f}, {terminated=}, {truncated=}, {failed=}")
             env.render()
             sync(i, start, env.CTRL_TIMESTEP)
 

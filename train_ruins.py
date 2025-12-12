@@ -31,15 +31,15 @@ def train():
     action_std = 0.6                    # starting std for action distribution (Multivariate Normal)
     action_std_decay_rate = 0.05        # linearly decay action_std (action_std = action_std - action_std_decay_rate)
     min_action_std = 0.1                # minimum action_std (stop decay after action_std <= min_action_std)
-    action_std_decay_freq = int(1e7)  # action_std decay frequency (in num timesteps)
+    action_std_decay_freq = int(1e6)  # action_std decay frequency (in num timesteps)
     #####################################################
 
     ################ PPO hyperparameters ################
     #update_timestep = max_ep_len * 4      # update policy every n timesteps
-    max_training_timesteps = int(1e8)   # break training loop if timeteps > max_training_timesteps
+    max_training_timesteps = int(1e7)   # break training loop if timeteps > max_training_timesteps
     K_epochs = 80               # update policy for K epochs in one PPO update
 
-    eps_clip = 0.2          # clip parameter for PPO
+    eps_clip = 0.1          # clip parameter for PPO
     gamma = 0.99            # discount factor
     lr_actor = 0.0003       # learning rate for actor network
     lr_critic = 0.001       # learning rate for critic network

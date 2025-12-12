@@ -128,8 +128,7 @@ if __name__ == '__main__':
     import itertools as it
     for n in it.count():
 
-        # failed = test("3958_ppo_drone", render=True)
-        failed = test("12921_ppo_drone", render=True)
+        failed = test("23087_ppo_drone", render=True)
         if failed: break
         print(f"trial {n}, did not fail yet")
         if n == 0: break
