@@ -3,34 +3,43 @@ from time import perf_counter
 import pickle as pk
 import numpy as np
 import torch as tr
-import ruins_utils as ru
+import sb_utils as su
+
+# Farama docs say fail when:
+# Pole Angle is greater than ±12°
+# Termination: Cart Position is greater than ±2.4 
+def failure_predicate(env, obs, reward, done, infos):
+    pos, ang = obs[0,0], obs[0,2]
+    return (abs(ang) >= .2095) or (abs(pos) >= 2.4)
 
 def setup_mu():
-    # MLP - same architecture as critic
-    # num_hidden = 256 # worked on 1
-    num_hidden = 512
+    # MLP - same architecture as q-network except last layer
+    num_hidden = 256
     return tr.nn.Sequential(
-        tr.nn.Linear(in_features=12, out_features=num_hidden, bias=True),
-        tr.nn.Tanh(),
+        tr.nn.Linear(in_features=4, out_features=num_hidden, bias=True),
+        # tr.nn.Tanh(),
+        tr.nn.ReLU(), # dqn uses this
         tr.nn.Linear(in_features=num_hidden, out_features=num_hidden, bias=True),
-        tr.nn.Tanh(),
+        # tr.nn.Tanh(),
+        tr.nn.ReLU(), # dqn uses this
         tr.nn.Linear(in_features=num_hidden, out_features=1, bias=True),
     )
 
 if __name__ == "__main__":
 
-    policy_checkpoint_name = "23087_ppo_drone"
-    # prediction_window = 24 # 0.1 of 240 timesteps per episode
-    prediction_window = 8
-    resume = True
+    env_name = "CartPole-v1"
+    alg_name = "dqn"
+    num_timesteps = 500
+    prediction_window = 50
+    resume = False
     do_training = True
     do_show = True
-    num_updates = 1400
+    num_updates = 500
     batch_size = 16
     learning_rate = 0.0001
     report_period = 1
     checkpoint_period = 100
-    basename = "ruins_mu"
+    basename = "cartpole_mu"
 
     mu = setup_mu()
     loss_fn = tr.nn.BCEWithLogitsLoss()
@@ -59,7 +68,7 @@ if __name__ == "__main__":
 
     if do_training:
 
-        env, model = ru.load(policy_checkpoint_name, render=False)
+        env, model = su.load(env_name, alg_name)
         start_loop = perf_counter()
         for update in range(start_update, num_updates):
     
@@ -69,7 +78,7 @@ if __name__ == "__main__":
             for example in range(batch_size):
     
                 # run an episode
-                failure, _, _, observations, _ = ru.run(env, model, render=False)
+                failure, _, _, observations, _ = su.run(env, model, num_timesteps, failure_predicate)
     
                 # save failure indicators and times
                 failures.append(failure)

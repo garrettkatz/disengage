@@ -189,15 +189,28 @@ if __name__ == "__main__":
     algo = "a2c"
     n_timesteps = 1000
     render = True
+    def failure_predicate(env, obs, reward, done, infos): return (reward[0] == -100)
+
+    # env = "CartPole-v1"
+    # algo = "dqn"
+    # n_timesteps = 500
+    # render = False
+    # # Farama docs say fail when:
+    # # Pole Angle is greater than ±12°
+    # # Termination: Cart Position is greater than ±2.4 
+    # def failure_predicate(env, obs, reward, done, infos):
+    #     pos, ang = obs[0,0], obs[0,2]
+    #     return (abs(ang) >= .2095) or (abs(pos) >= 2.4)
 
     env, model = load(env, algo, render)
     print(env)
-    print(model)
-
-    def failure_predicate(env, obs, reward, done, infos): return (reward[0] == -100)
+    # print(model.q_net) # dqn
 
     failure, ep_rew, ep_len, observations, actions = run(
         env, model, n_timesteps, failure_predicate, render, stochastic=False)
 
+    print(f"{len(observations)} timesteps, last obs:")
+    print(observations[-1])
     input(f"{failure=:b}")
+
 

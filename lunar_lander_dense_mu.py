@@ -3,14 +3,16 @@ from time import perf_counter
 import pickle as pk
 import numpy as np
 import torch as tr
-import ruins_utils as ru
+import sb_utils as su
+
+def failure_predicate(env, obs, reward, done, infos):
+    return (reward[0] == -100)
 
 def setup_mu():
     # MLP - same architecture as critic
-    # num_hidden = 256 # worked on 1
-    num_hidden = 512
+    num_hidden = 256
     return tr.nn.Sequential(
-        tr.nn.Linear(in_features=12, out_features=num_hidden, bias=True),
+        tr.nn.Linear(in_features=8, out_features=num_hidden, bias=True),
         tr.nn.Tanh(),
         tr.nn.Linear(in_features=num_hidden, out_features=num_hidden, bias=True),
         tr.nn.Tanh(),
@@ -19,18 +21,19 @@ def setup_mu():
 
 if __name__ == "__main__":
 
-    policy_checkpoint_name = "23087_ppo_drone"
-    # prediction_window = 24 # 0.1 of 240 timesteps per episode
-    prediction_window = 8
-    resume = True
-    do_training = True
+    env_name = "LunarLander-v3"
+    alg_name = "a2c"
+    num_timesteps = 1000
+    prediction_window = 50
+    resume = False
+    do_training = False
     do_show = True
-    num_updates = 1400
+    num_updates = 2000
     batch_size = 16
     learning_rate = 0.0001
     report_period = 1
     checkpoint_period = 100
-    basename = "ruins_mu"
+    savename = "ll_dense_mu"
 
     mu = setup_mu()
     loss_fn = tr.nn.BCEWithLogitsLoss()
@@ -38,10 +41,10 @@ if __name__ == "__main__":
 
     if resume:
 
-        resume_data = tr.load(f"{basename}_H{prediction_window}.pt", weights_only=True)
+        resume_data = tr.load(f"{savename}_H{prediction_window}.pt", weights_only=True)
         mu.load_state_dict(resume_data['mu'])
         optimizer.load_state_dict(resume_data['opt'])
-        with open(f"{basename}_H{prediction_window}.pkl","rb") as f:
+        with open(f"{savename}_H{prediction_window}.pkl","rb") as f:
             (failures, durations, losses, accuracies, probs, gradmaxs) = pk.load(f)
 
         start_update = len(losses)
@@ -59,8 +62,9 @@ if __name__ == "__main__":
 
     if do_training:
 
-        env, model = ru.load(policy_checkpoint_name, render=False)
+        env, model = su.load(env_name, alg_name)
         start_loop = perf_counter()
+
         for update in range(start_update, num_updates):
     
             # collect a batch
@@ -69,29 +73,27 @@ if __name__ == "__main__":
             for example in range(batch_size):
     
                 # run an episode
-                failure, _, _, observations, _ = ru.run(env, model, render=False)
+                failure, _, _, observations, _ = su.run(env, model, num_timesteps, failure_predicate)
     
                 # save failure indicators and times
                 failures.append(failure)
                 durations.append(len(observations))
-    
-                # extract example input
-                if failure:
-                    # within prediction window of failure
-                    lo = max(0, len(observations)-prediction_window)
-                    idx = np.random.choice(np.arange(lo, len(observations)))
-                    obs = observations[idx]
-                else:
-                    # uniformly over time
-                    obs = observations[np.random.randint(len(observations))]
-    
-                # update batch
-                batch_obs.append(obs)
-                batch_lab.append(failure)
-    
+
+                # save episode observations
+                observations = tr.tensor(np.concatenate(observations, axis=0)).to(tr.float32)
+                batch_obs.append(observations)
+                
+                # save time-wise labels
+                lo = max(0, len(observations)-prediction_window)
+                timewise_labels = tr.zeros(len(observations))
+                timewise_labels[lo:] = 1.
+                batch_lab.append(timewise_labels)
+
+            # package batch
+            features = tr.cat(batch_obs, dim=0)
+            labels = tr.cat(batch_lab)
+
             # forward pass
-            features = tr.tensor(np.concatenate(batch_obs, axis=0)).to(tr.float32)
-            labels = tr.tensor(batch_lab).to(tr.float32)
             logits = mu(features).squeeze()
             loss = loss_fn(logits, labels)
             correct = (((labels > .5) & (logits > 0)) | ((labels < .5) & (logits <= 0))).to(tr.float).mean()
@@ -118,13 +120,13 @@ if __name__ == "__main__":
                 tr.save({
                     'mu': mu.state_dict(),
                     'opt': optimizer.state_dict(),
-                }, f"{basename}_H{prediction_window}.pt")
-                with open(f"{basename}_H{prediction_window}.pkl","wb") as f:
+                }, f"{savename}_H{prediction_window}.pt")
+                with open(f"{savename}_H{prediction_window}.pkl","wb") as f:
                     pk.dump((failures, durations, losses, accuracies, probs, gradmaxs), f)
 
             if (update+1) % checkpoint_period == 0:
-                tr.save(mu.state_dict(), f"{basename}_H{prediction_window}_{update+1}.pt")
-                with open(f"{basename}_H{prediction_window}_{update+1}.pkl","wb") as f:
+                tr.save(mu.state_dict(), f"{savename}_H{prediction_window}_{update+1}.pt")
+                with open(f"{savename}_H{prediction_window}_{update+1}.pkl","wb") as f:
                     pk.dump((failures, durations, losses, accuracies, probs, gradmaxs), f)
 
         total_time = perf_counter() - start_loop
@@ -132,7 +134,7 @@ if __name__ == "__main__":
 
     if do_show:
 
-        with open(f"{basename}_H{prediction_window}.pkl","rb") as f:
+        with open(f"{savename}_H{prediction_window}.pkl","rb") as f:
             (failures, durations, losses, accuracies, probs, gradmaxs) = pk.load(f)
     
         import matplotlib.pyplot as pt
@@ -157,7 +159,7 @@ if __name__ == "__main__":
 
         fig.supxlabel("Parameter update")
         pt.tight_layout()
-        pt.savefig(f"{basename}.eps")
+        pt.savefig(f"{savename}.eps")
         pt.show()
 
 

@@ -111,7 +111,7 @@ if __name__ == "__main__":
 
     render = True
 
-    env, model = load("12144_ppo_drone", render)
+    env, model = load("23087_ppo_drone", render)
     print(env)
     print(model)
 

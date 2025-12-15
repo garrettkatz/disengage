@@ -173,7 +173,10 @@ class FlyThruRuinsAviary(BaseRLAviary):
             self.obstacle_ids.append(add_box(position, quaternion, half_extents, rgb, mass=0))
 
         # sandy ground
-        self.obstacle_ids.append(add_box((0,0,0), (0,0,0,1), (100, 100, .02), (246/255, 215/255, 176/255), mass=0))
+        ground_id = add_box((0,0,0), (0,0,0,1), (100, 100, .02), (246/255, 215/255, 176/255), mass=0)
+        sand_id = p.loadTexture("noisy_sand.png")
+        p.changeVisualShape(ground_id, -1, textureUniqueId = sand_id)
+        self.obstacle_ids.append(ground_id)
 
     def collision_distance(self):
         drone_id = self.DRONE_IDS[0]

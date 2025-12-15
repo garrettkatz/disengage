@@ -1,20 +1,18 @@
 import pickle as pk
 import numpy as np
 import torch as tr
-import sb_utils as su
-from lunar_lander_mu import failure_predicate, setup_mu
+import ruins_utils as ru
+from ruins_mu import setup_mu
 
 if __name__ == "__main__":
 
-    env_name = "LunarLander-v3"
-    alg_name = "a2c"
-    num_timesteps = 1000
-    prediction_window = 25
+    policy_checkpoint_name = "23087_ppo_drone"
+    prediction_window = 8
     num_calibration = 100
     num_repetitions = 100
-    mu_basename = "ll_mu"
-    results_basename = "llp"
-    checkpoints = [100, 1500, 3000, 4500, 6000, 7500]
+    mu_basename = "ruins_mu"
+    results_basename = "ruinsp"
+    checkpoints = [100, 1700, 3400, 5000, 6700, 8300, 10_000]
     delta = 0.05
     do_reps = False
     do_show = True
@@ -25,7 +23,7 @@ if __name__ == "__main__":
         tr.set_grad_enabled(False)
     
         # load environment and blackbox policy
-        env, model = su.load(env_name, alg_name)
+        env, model = ru.load(policy_checkpoint_name, render=False)
     
         # test each mu checkpoint
         failures = np.empty((len(checkpoints), num_repetitions), dtype=bool)
@@ -46,7 +44,7 @@ if __name__ == "__main__":
                 for episode in range(num_calibration):
             
                     # run an episode
-                    failure, _, _, observations, _ = su.run(env, model, num_timesteps, failure_predicate)
+                    failure, _, _, observations, _ = ru.run(env, model, render=False)
             
                     # evaluate mu
                     features = tr.tensor(np.concatenate(observations, axis=0)).to(tr.float32)
@@ -62,7 +60,7 @@ if __name__ == "__main__":
                 tau = 1 - h
             
                 # deploy
-                failure, _, _, observations, _ = su.run(env, model, num_timesteps, failure_predicate)
+                failure, _, _, observations, _ = ru.run(env, model, render=False)
                 features = tr.tensor(np.concatenate(observations, axis=0)).to(tr.float32)
                 probs = tr.sigmoid(mu(features).squeeze())
             
@@ -121,3 +119,5 @@ if __name__ == "__main__":
         pt.tight_layout()
         pt.savefig(f"{results_basename}.eps")
         pt.show()
+
+

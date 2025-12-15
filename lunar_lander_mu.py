@@ -28,7 +28,7 @@ if __name__ == "__main__":
     resume = True
     do_training = True
     do_show = True
-    num_updates = 500
+    num_updates = 2000
     batch_size = 16
     learning_rate = 0.0001
     report_period = 1

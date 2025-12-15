@@ -2,19 +2,19 @@ import pickle as pk
 import numpy as np
 import torch as tr
 import sb_utils as su
-from lunar_lander_mu import failure_predicate, setup_mu
+from lunar_lander_dense_mu import failure_predicate, setup_mu
 
 if __name__ == "__main__":
 
     env_name = "LunarLander-v3"
     alg_name = "a2c"
     num_timesteps = 1000
-    prediction_window = 25
+    prediction_window = 50
     num_calibration = 100
     num_repetitions = 100
-    mu_basename = "ll_mu"
-    results_basename = "llp"
-    checkpoints = [100, 1500, 3000, 4500, 6000, 7500]
+    mu_basename = "ll_dense_mu"
+    results_basename = "lldp"
+    checkpoints = [100, 700, 1300, 2000]
     delta = 0.05
     do_reps = False
     do_show = True
@@ -121,3 +121,5 @@ if __name__ == "__main__":
         pt.tight_layout()
         pt.savefig(f"{results_basename}.eps")
         pt.show()
+
+
