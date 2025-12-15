@@ -10,6 +10,8 @@ from humanoid_bench.mjx.envs.cpu_env import HumanoidNumpyEnv
 import tqdm
 from humanoid_bench.mjx.video_utils import save_numpy_as_video, make_grid_video_from_numpy
 
+RELATIVE_NOISE = .5 # maximum percent change in perturbed action magnitudes
+
 def load():
 
     task = "reach"
@@ -52,6 +54,7 @@ def run(env, torch_policy, num_timesteps=1000, render=False):
         video = []
         while True:
             action = torch_policy(state)
+            action *= np.random.uniform(1. - RELATIVE_NOISE, 1. + RELATIVE_NOISE, action.shape)
             state, r, done, _ = env.step(action)
             reward += r
             i += 1
@@ -63,7 +66,7 @@ def run(env, torch_policy, num_timesteps=1000, render=False):
                 break
         all_videos = [np.array(video)]
         make_grid_video_from_numpy(all_videos, 1, output_name="evaluation.mp4", **{'fps': 24})
-        print("Rewards:", all_rewards)
+        print("Net reward:", reward)
 
         # viewer.close() # live video
 
@@ -74,6 +77,9 @@ def run(env, torch_policy, num_timesteps=1000, render=False):
         reward = 0
         while True:
             action = torch_policy(state)
+            action *= np.random.uniform(1. - RELATIVE_NOISE, 1. + RELATIVE_NOISE, action.shape)
+            # print(action.shape, type(action), action)
+            # input('.')
             state, r, done, _ = env.step(action)
             reward += r
             i += 1
@@ -85,5 +91,5 @@ def run(env, torch_policy, num_timesteps=1000, render=False):
 if __name__ == '__main__':
 
     env, model = load()
-    run(env, model, num_timesteps=1000, render=False)
+    run(env, model, num_timesteps=500, render=True)
     
