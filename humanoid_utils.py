@@ -35,12 +35,11 @@ def load():
 
     return env, torch_policy
 
-def run(env, torch_policy, num_timesteps=1000, render=False):
+def run(env, torch_policy, num_timesteps, failure_predicate, render=False):
 
     data_path = os.environ["HOME"] + '/humanoid-bench/data/reach_one_hand/'
     
     state = env.reset()
-    # print("State:", state)
     
     if render:
 
@@ -49,47 +48,74 @@ def run(env, torch_policy, num_timesteps=1000, render=False):
         renderer = mujoco.Renderer(m, height=480, width=480) # to save video
 
         state = env.reset()
+        observations = [state]
+        actions = []
+
         i = 0
-        reward = 0
+        ep_rew = 0
         video = []
         while True:
             action = torch_policy(state)
             action *= np.random.uniform(1. - RELATIVE_NOISE, 1. + RELATIVE_NOISE, action.shape)
-            state, r, done, _ = env.step(action)
-            reward += r
+            state, reward, done, info = env.step(action)
+            ep_rew += reward
             i += 1
+            failure = failure_predicate(env, state, reward, done, info)
+
+            observations.append(state)
+            actions.append(action)
+
             renderer.update_scene(d, camera='cam_default') # saved video
             # viewer.sync() # live view
             frame = renderer.render()
             video.append(frame)
-            if done or i > num_timesteps:
-                break
+
+            if done or failure or i >= num_timesteps: break
+
         all_videos = [np.array(video)]
         make_grid_video_from_numpy(all_videos, 1, output_name="evaluation.mp4", **{'fps': 24})
-        print("Net reward:", reward)
 
         # viewer.close() # live video
 
     else:
 
         state = env.reset()
+        observations = [state]
+        actions = []
+
         i = 0
-        reward = 0
+        ep_rew = 0
         while True:
             action = torch_policy(state)
             action *= np.random.uniform(1. - RELATIVE_NOISE, 1. + RELATIVE_NOISE, action.shape)
             # print(action.shape, type(action), action)
             # input('.')
-            state, r, done, _ = env.step(action)
-            reward += r
+            state, reward, done, info = env.step(action)
+            ep_rew += reward
             i += 1
-            if done or i > num_timesteps:
-                break
-            print(i, reward)
 
+            observations.append(state)
+            actions.append(action)
+
+            failure = failure_predicate(env, state, reward, done, info)
+            if done or failure or i >= num_timesteps: break
+
+    ep_len = i
+
+    return failure, ep_rew, ep_len, observations, actions
 
 if __name__ == '__main__':
 
     env, model = load()
-    run(env, model, num_timesteps=500, render=True)
-    
+    render = False
+    def failure_predicate(env, obs, reward, done, info): return done
+
+    for r in range(100):
+        failure, ep_rew, ep_len, observations, actions = run(
+            env, model, num_timesteps=500, failure_predicate=failure_predicate, render=render)
+        print(r, ep_rew, ep_len)
+        if failure: break
+
+    print(observations[-1])
+    print(observations[-1].shape)
+

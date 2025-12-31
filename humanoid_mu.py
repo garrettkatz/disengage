@@ -3,16 +3,15 @@ from time import perf_counter
 import pickle as pk
 import numpy as np
 import torch as tr
-import sb_utils as su
+import humanoid_utils as hu
 
-def failure_predicate(env, obs, reward, done, infos):
-    return (reward[0] == -100)
+def failure_predicate(env, obs, reward, done, infos): return done
 
 def setup_mu():
-    # MLP - same architecture as critic
+    # MLP - same architecture as critic in PPO policy for reach task
     num_hidden = 256
     return tr.nn.Sequential(
-        tr.nn.Linear(in_features=8, out_features=num_hidden, bias=True),
+        tr.nn.Linear(in_features=55, out_features=num_hidden, bias=True),
         tr.nn.Tanh(),
         tr.nn.Linear(in_features=num_hidden, out_features=num_hidden, bias=True),
         tr.nn.Tanh(),
@@ -21,19 +20,17 @@ def setup_mu():
 
 if __name__ == "__main__":
 
-    env_name = "LunarLander-v3"
-    alg_name = "a2c"
-    num_timesteps = 1000
-    prediction_window = 25
+    num_timesteps = 500
+    prediction_window = 10
     resume = True
     do_training = False
     do_show = True
-    num_updates = 8000
+    num_updates = 200
     batch_size = 16
     learning_rate = 0.0001
     report_period = 1
-    checkpoint_period = 100
-    basename = "ll_mu"
+    checkpoint_period = 10
+    basename = "hr_mu"
 
     mu = setup_mu()
     loss_fn = tr.nn.BCEWithLogitsLoss()
@@ -62,7 +59,7 @@ if __name__ == "__main__":
 
     if do_training:
 
-        env, model = su.load(env_name, alg_name)
+        env, model = hu.load()
         start_loop = perf_counter()
         for update in range(start_update, num_updates):
     
@@ -72,7 +69,7 @@ if __name__ == "__main__":
             for example in range(batch_size):
     
                 # run an episode
-                failure, _, _, observations, _ = su.run(env, model, num_timesteps, failure_predicate)
+                failure, _, _, observations, _ = hu.run(env, model, num_timesteps, failure_predicate)
     
                 # save failure indicators and times
                 failures.append(failure)
@@ -93,7 +90,8 @@ if __name__ == "__main__":
                 batch_lab.append(failure)
     
             # forward pass
-            features = tr.tensor(np.concatenate(batch_obs, axis=0)).to(tr.float32)
+            # features = tr.tensor(np.concatenate(batch_obs, axis=0)).to(tr.float32)
+            features = tr.tensor(np.stack(batch_obs)).to(tr.float32) # unlike SB3, no batch dimension in obs
             labels = tr.tensor(batch_lab).to(tr.float32)
             logits = mu(features).squeeze()
             loss = loss_fn(logits, labels)
@@ -137,9 +135,11 @@ if __name__ == "__main__":
 
         with open(f"{basename}_H{prediction_window}.pkl","rb") as f:
             (failures, durations, losses, accuracies, probs, gradmaxs) = pk.load(f)
+
+        print(f"faiure rate = {np.mean(failures)}")
     
         import matplotlib.pyplot as pt
-        window = 50
+        window = 10
         fig = pt.figure(figsize=(6,3))
 
         pt.subplot(1,3,1)
@@ -173,4 +173,6 @@ if __name__ == "__main__":
         # pt.plot(gradmaxs)
         # pt.title("gradmaxs")
         # pt.show()
+
+
 

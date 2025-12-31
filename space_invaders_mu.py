@@ -21,19 +21,19 @@ def setup_mu():
 
 if __name__ == "__main__":
 
-    env_name = "LunarLander-v3"
-    alg_name = "a2c"
-    num_timesteps = 1000
-    prediction_window = 25
-    resume = True
-    do_training = False
+    env_name = "SpaceInvadersNoFrameskip-v4"
+    alg_name = "dqn"
+    num_timesteps = 500
+    prediction_window = 10
+    resume = False
+    do_training = True
     do_show = True
-    num_updates = 8000
+    num_updates = 10
     batch_size = 16
     learning_rate = 0.0001
     report_period = 1
-    checkpoint_period = 100
-    basename = "ll_mu"
+    checkpoint_period = 10
+    basename = "si_mu"
 
     mu = setup_mu()
     loss_fn = tr.nn.BCEWithLogitsLoss()
@@ -173,4 +173,6 @@ if __name__ == "__main__":
         # pt.plot(gradmaxs)
         # pt.title("gradmaxs")
         # pt.show()
+
+
 

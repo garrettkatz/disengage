@@ -23,9 +23,9 @@ if __name__ == "__main__":
     # prediction_window = 24 # 0.1 of 240 timesteps per episode
     prediction_window = 8
     resume = True
-    do_training = True
+    do_training = False
     do_show = True
-    num_updates = 1400
+    num_updates = 10000
     batch_size = 16
     learning_rate = 0.0001
     report_period = 1

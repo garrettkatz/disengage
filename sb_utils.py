@@ -183,7 +183,6 @@ def run(env, model, n_timesteps, failure_predicate, render=False, stochastic=Fal
     return failure, ep_rew, ep_len, observations, actions
 
 if __name__ == "__main__":
-    # model, _ = load_model("a2c", "LunarLander-v3")
 
     env = "LunarLander-v3"
     algo = "a2c"

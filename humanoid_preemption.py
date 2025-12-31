@@ -1,20 +1,18 @@
 import pickle as pk
 import numpy as np
 import torch as tr
-import sb_utils as su
-from lunar_lander_mu import failure_predicate, setup_mu
+import humanoid_utils as hu
+from humanoid_mu import failure_predicate, setup_mu
 
 if __name__ == "__main__":
 
-    env_name = "LunarLander-v3"
-    alg_name = "a2c"
-    num_timesteps = 1000
-    prediction_window = 25
+    num_timesteps = 500
+    prediction_window = 10
     num_calibration = 100
-    num_repetitions = 100
-    mu_basename = "ll_mu"
-    results_basename = "llp"
-    checkpoints = [100, 1500, 3000, 4500, 6000, 7500]
+    num_repetitions = 30
+    mu_basename = "hr_mu"
+    results_basename = "hrp"
+    checkpoints = [10, 40, 70, 100, 130, 160, 190]
     delta = 0.05
     do_reps = False
     do_show = True
@@ -25,7 +23,7 @@ if __name__ == "__main__":
         tr.set_grad_enabled(False)
     
         # load environment and blackbox policy
-        env, model = su.load(env_name, alg_name)
+        env, model = hu.load()
     
         # test each mu checkpoint
         failures = np.empty((len(checkpoints), num_repetitions), dtype=bool)
@@ -46,10 +44,11 @@ if __name__ == "__main__":
                 for episode in range(num_calibration):
             
                     # run an episode
-                    failure, _, _, observations, _ = su.run(env, model, num_timesteps, failure_predicate)
+                    failure, _, _, observations, _ = hu.run(env, model, num_timesteps, failure_predicate)
             
                     # evaluate mu
-                    features = tr.tensor(np.concatenate(observations, axis=0)).to(tr.float32)
+                    # features = tr.tensor(np.concatenate(observations, axis=0)).to(tr.float32)
+                    features = tr.tensor(np.stack(observations)).to(tr.float32) # missing batch dim
                     probs = tr.sigmoid(mu(features).squeeze())
     
                     # record z statistic
@@ -62,8 +61,9 @@ if __name__ == "__main__":
                 tau = 1 - h
             
                 # deploy
-                failure, _, _, observations, _ = su.run(env, model, num_timesteps, failure_predicate)
-                features = tr.tensor(np.concatenate(observations, axis=0)).to(tr.float32)
+                failure, _, _, observations, _ = hu.run(env, model, num_timesteps, failure_predicate)
+                # features = tr.tensor(np.concatenate(observations, axis=0)).to(tr.float32)
+                features = tr.tensor(np.stack(observations)).to(tr.float32) # missing batch dim
                 probs = tr.sigmoid(mu(features).squeeze())
             
                 # save results
@@ -114,7 +114,7 @@ if __name__ == "__main__":
 
         pt.subplot(1,2,2)
         for checkpoint_num, t in zip(checkpoints, taus):
-            pt.plot(checkpoint_num + 100*np.random.randn(num_repetitions), t, 'k.')
+            pt.plot(checkpoint_num + 5*np.random.randn(num_repetitions), t, 'k.')
         pt.xlabel("Checkpoint")
         pt.ylabel("$\\tau$")
 
