@@ -142,7 +142,9 @@ def load(env, alg_name, render=False):
     return env, model
 
 # @profile
-def run(env, model, n_timesteps, failure_predicate, render=False, stochastic=False):
+def run(env, model, n_timesteps, failure_predicate, render=False, stochastic=False, perturb_action=None):
+    # perturb_action(action) should return perturbed action (None is no perturbation)
+
     deterministic = not stochastic
 
     obs = env.reset()
@@ -164,6 +166,10 @@ def run(env, model, n_timesteps, failure_predicate, render=False, stochastic=Fal
             episode_start=episode_start,
             deterministic=deterministic,
         )
+
+        if perturb_action is not None:
+            action = perturb_action(action)
+
         obs, reward, done, infos = env.step(action)    
         episode_start = done
 
@@ -184,29 +190,39 @@ def run(env, model, n_timesteps, failure_predicate, render=False, stochastic=Fal
 
 if __name__ == "__main__":
 
-    env = "LunarLander-v3"
-    algo = "a2c"
-    n_timesteps = 1000
-    render = True
-    def failure_predicate(env, obs, reward, done, infos): return (reward[0] == -100)
+    # env = "LunarLander-v3"
+    # algo = "a2c"
+    # n_timesteps = 1000
+    # render = True
+    # perturb_action = None
+    # def failure_predicate(env, obs, reward, done, infos): return (reward[0] == -100)
 
-    # env = "CartPole-v1"
-    # algo = "dqn"
-    # n_timesteps = 500
-    # render = False
-    # # Farama docs say fail when:
-    # # Pole Angle is greater than ±12°
-    # # Termination: Cart Position is greater than ±2.4 
-    # def failure_predicate(env, obs, reward, done, infos):
-    #     pos, ang = obs[0,0], obs[0,2]
-    #     return (abs(ang) >= .2095) or (abs(pos) >= 2.4)
+    env = "CartPole-v1"
+    algo = "dqn"
+    n_timesteps = 499 # 500-1 ensures max timestep termination does not get counted as failure
+    render = False
+    def perturb_action(a):
+        # 10 percent chance of flipping action from 0 to 1:
+        # a=0: p=(.9, .1)
+        # a=1: p=(.1, .9)
+        # a=?: p=(.9 - .8*a, .1 + .8*a)
+        a = a[0]
+        return np.random.choice((0,1), size=(1,), p=(.9-.8*a, .1+.8*a))
+    def failure_predicate(env, obs, reward, done, infos):
+        # Farama docs say fail when:
+        # Pole Angle is greater than ±12°
+        # Termination: Cart Position is greater than ±2.4 
+        return done[0] # but for some reason episode can terminate early even when following is not satisfied
+        # pos, ang = obs[0,0], obs[0,2]
+        # print('fp', pos, ang)
+        # return (abs(ang) >= .2095) or (abs(pos) >= 2.4)
 
     env, model = load(env, algo, render)
     print(env)
     # print(model.q_net) # dqn
 
     failure, ep_rew, ep_len, observations, actions = run(
-        env, model, n_timesteps, failure_predicate, render, stochastic=False)
+        env, model, n_timesteps, failure_predicate, render, stochastic=False, perturb_action=perturb_action)
 
     print(f"{len(observations)} timesteps, last obs:")
     print(observations[-1])
