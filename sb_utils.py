@@ -202,12 +202,13 @@ if __name__ == "__main__":
     n_timesteps = 499 # 500-1 ensures max timestep termination does not get counted as failure
     render = False
     def perturb_action(a):
-        # 10 percent chance of flipping action from 0 to 1:
-        # a=0: p=(.9, .1)
-        # a=1: p=(.1, .9)
-        # a=?: p=(.9 - .8*a, .1 + .8*a)
-        a = a[0]
-        return np.random.choice((0,1), size=(1,), p=(.9-.8*a, .1+.8*a))
+        if np.random.rand() < .05: a = 1 - a # some chance of flipping action from 0 to 1:
+        return a
+        # # a=0: p=(.9, .1)
+        # # a=1: p=(.1, .9)
+        # # a=?: p=(.9 - .8*a, .1 + .8*a)
+        # a = a[0]
+        # return np.random.choice((0,1), size=(1,), p=(.9-.8*a, .1+.8*a))
     def failure_predicate(env, obs, reward, done, infos):
         # Farama docs say fail when:
         # Pole Angle is greater than ±12°
