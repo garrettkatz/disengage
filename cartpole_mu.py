@@ -5,23 +5,23 @@ import numpy as np
 import torch as tr
 import sb_utils as su
 
-# Farama docs say fail when:
-# Pole Angle is greater than ±12°
-# Termination: Cart Position is greater than ±2.4 
+def perturb_action(a):
+    if np.random.rand() < .05: a = 1 - a # 5% chance of flipping 0|1 action
+    return a
+
 def failure_predicate(env, obs, reward, done, infos):
-    pos, ang = obs[0,0], obs[0,2]
-    return (abs(ang) >= .2095) or (abs(pos) >= 2.4)
+    # early termination signals failure (large angle or horizontal coordinate)
+    # need to use 499 timesteps below so time-limit reached does not count as failure
+    return done[0]
 
 def setup_mu():
     # MLP - same architecture as q-network except last layer
     num_hidden = 256
     return tr.nn.Sequential(
         tr.nn.Linear(in_features=4, out_features=num_hidden, bias=True),
-        # tr.nn.Tanh(),
-        tr.nn.ReLU(), # dqn uses this
+        tr.nn.ReLU(),
         tr.nn.Linear(in_features=num_hidden, out_features=num_hidden, bias=True),
-        # tr.nn.Tanh(),
-        tr.nn.ReLU(), # dqn uses this
+        tr.nn.ReLU(),
         tr.nn.Linear(in_features=num_hidden, out_features=1, bias=True),
     )
 
@@ -29,17 +29,17 @@ if __name__ == "__main__":
 
     env_name = "CartPole-v1"
     alg_name = "dqn"
-    num_timesteps = 500
-    prediction_window = 50
+    num_timesteps = 499 # 500-1 ensures max timestep termination does not get counted as failure
+    prediction_window = 10
     resume = False
     do_training = True
     do_show = True
-    num_updates = 500
     batch_size = 16
+    num_updates = 2000 # *16 ~ 2% total number of times an observation is fed through cartpole dqn during training
     learning_rate = 0.0001
     report_period = 1
     checkpoint_period = 100
-    basename = "cartpole_mu"
+    basename = "cp_data/cp_mu"
 
     mu = setup_mu()
     loss_fn = tr.nn.BCEWithLogitsLoss()
@@ -78,7 +78,7 @@ if __name__ == "__main__":
             for example in range(batch_size):
     
                 # run an episode
-                failure, _, _, observations, _ = su.run(env, model, num_timesteps, failure_predicate)
+                failure, _, _, observations, _ = su.run(env, model, num_timesteps, failure_predicate, perturb_action=perturb_action)
     
                 # save failure indicators and times
                 failures.append(failure)
@@ -86,9 +86,8 @@ if __name__ == "__main__":
     
                 # extract example input
                 if failure:
-                    # within prediction window of failure
-                    lo = max(0, len(observations)-prediction_window)
-                    idx = np.random.choice(np.arange(lo, len(observations)))
+                    # near boundary of prediction window
+                    idx = max(0, len(observations) - np.random.randint(prediction_window, 2*prediction_window))
                     obs = observations[idx]
                 else:
                     # uniformly over time
@@ -103,7 +102,8 @@ if __name__ == "__main__":
             labels = tr.tensor(batch_lab).to(tr.float32)
             logits = mu(features).squeeze()
             loss = loss_fn(logits, labels)
-            correct = (((labels > .5) & (logits > 0)) | ((labels < .5) & (logits <= 0))).to(tr.float).mean()
+            # correct = (((labels > .5) & (logits > 0)) | ((labels < .5) & (logits <= 0))).to(tr.float).mean()
+            correct = ((logits.detach().numpy() > 0) == labels.numpy()).mean()
     
             # backward pass and update
             optimizer.zero_grad()
@@ -169,7 +169,6 @@ if __name__ == "__main__":
         pt.savefig(f"{basename}.eps")
         pt.show()
 
-
         # pt.subplot(4,1,2)
         # pt.plot(accuracies)
         # pt.title("accuracies")
@@ -180,5 +179,4 @@ if __name__ == "__main__":
         # pt.plot(gradmaxs)
         # pt.title("gradmaxs")
         # pt.show()
-
 

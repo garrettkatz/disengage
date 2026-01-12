@@ -160,12 +160,13 @@ def run(env, model, n_timesteps, failure_predicate, render=False, stochastic=Fal
 
     for timestep in range(n_timesteps):
 
-        action, lstm_states = model.predict(
-            obs,  # type: ignore[arg-type]
-            state=lstm_states,
-            episode_start=episode_start,
-            deterministic=deterministic,
-        )
+        with tr.no_grad():
+            action, lstm_states = model.predict(
+                obs,  # type: ignore[arg-type]
+                state=lstm_states,
+                episode_start=episode_start,
+                deterministic=deterministic,
+            )
 
         if perturb_action is not None:
             action = perturb_action(action)
