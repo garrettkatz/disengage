@@ -11,10 +11,10 @@ if __name__ == "__main__":
     num_timesteps = 499 # 500-1 ensures max timestep termination does not get counted as failure
     prediction_window = 10
     num_calibration = 100
-    num_repetitions = 100
+    num_repetitions = 50
     mu_basename = "cp_data/cp_mu"
     results_basename = "cp_data/cp_p"
-    checkpoints = [100, 1000, 2000]
+    checkpoints = [300]
     delta = 0.05
     do_reps = True
     do_show = True
@@ -37,7 +37,8 @@ if __name__ == "__main__":
     
             # load checkpoint
             mu = setup_mu()
-            mu.load_state_dict(tr.load(f"{mu_basename}_H{prediction_window}_{checkpoint_num}.pt", weights_only=True))
+            # mu.load_state_dict(tr.load(f"{mu_basename}_H{prediction_window}_{checkpoint_num}.pt", weights_only=True))
+            mu.load_state_dict(tr.load(f"cp_data/cp_rec_lr0.0001_{checkpoint_num}.pt", weights_only=True))
     
             # experimental repetitions to estimate preemption failure rate
             for rep in range(num_repetitions):
