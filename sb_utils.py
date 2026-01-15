@@ -10,6 +10,8 @@ from rl_zoo3.exp_manager import ExperimentManager
 from rl_zoo3.utils import get_model_path
 from rl_zoo3.load_from_hub import download_from_hub
 
+# cartpole version with sticky actions
+
 def load(env, alg_name, render=False):
 
     env_name = EnvironmentName(env)
@@ -142,12 +144,16 @@ def load(env, alg_name, render=False):
     return env, model
 
 # @profile
-def run(env, model, n_timesteps, failure_predicate, render=False, stochastic=False, perturb_action=None):
+def run(env, model, n_timesteps, failure_predicate, render=False, stochastic=False, perturb_action=None, init_state=None):
     # perturb_action(action) should return perturbed action (None is no perturbation)
+    # if provided, lock to provided init state
 
     deterministic = not stochastic
 
     obs = env.reset()
+    if init_state is not None:
+        env.set_attr("state", init_state, indices=0)
+        obs = init_state
 
     observations = [obs]
     actions = []

@@ -6,7 +6,7 @@ import torch as tr
 import sb_utils as su
 
 def perturb_action(a):
-    if np.random.rand() < .05: a = 1 - a # 5% chance of flipping 0|1 action
+    if np.random.rand() < .025: a = 1 - a # 2.5% chance of flipping 0|1 action
     return a
 
 def failure_predicate(env, obs, reward, done, infos):
