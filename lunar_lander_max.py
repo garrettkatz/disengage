@@ -24,9 +24,9 @@ def setup_mu():
 
 if __name__ == "__main__":
 
-    resume = False
     do_sampling = True
     do_training = True
+    resume = False
     do_show = True
 
     env_name = "LunarLander-v3"
@@ -36,17 +36,20 @@ if __name__ == "__main__":
     learning_rate = 0.001
     max_lead_time = 10
 
-    num_updates = 2000 # 5000 is parity with original training
-    batch_size = 40 # 40 observation pairs is parity with original training
+    train_fraction = .8 # for train/test split
+    num_updates = 20000 # 5000 is parity with original training
+    batch_size = 32 # 40 observation pairs is parity with original training
     report_period = 10
     checkpoint_period = 1000
-    bucket_size = 100 # buckets for learning curve trendlines
+    loss_bucket_size = 100 # buckets for learning curve trendlines
+    accu_bucket_size = 10 # buckets for accuracy curve trendlines
     basename = "ll_data/ll_max"
 
     # initializations
     mu = setup_mu()
     env, model = su.load(env_name, alg_name)
-    optimizer = tr.optim.Adam(mu.parameters(), lr=learning_rate)
+    # optimizer = tr.optim.Adam(mu.parameters(), lr=learning_rate)
+    optimizer = tr.optim.AdamW(mu.parameters(), lr=learning_rate, weight_decay=.5)
     # optimizer = tr.optim.SGD(mu.parameters(), lr=learning_rate)
 
     # fill buffer
@@ -70,24 +73,51 @@ if __name__ == "__main__":
 
         (safe_episodes, fail_episodes, failrate) = tr.load(f"{basename}_buffer.pt", weights_only=True)
 
+        # make train/test split
+        safe_split, fail_split = int(train_fraction * len(safe_episodes)), int(train_fraction * len(fail_episodes))
+        safe_episodes, safe_episodes_test = safe_episodes[:safe_split], safe_episodes[safe_split:]
+        fail_episodes, fail_episodes_test = fail_episodes[:fail_split], fail_episodes[fail_split:]
+
+        if resume:
+            (loss_curve, accu_curve, mu_state_dict, opt_state_dict) = tr.load(f"{basename}_r{num_rollouts}_lr{learning_rate}_lt{max_lead_time}_trained.pt", weights_only=True)
+            mu.load_state_dict(mu_state_dict)
+            optimizer.load_state_dict(opt_state_dict)
+            start_update = len(loss_curve)
+        else:
+            loss_curve = []
+            accu_curve = []
+            start_update = 0
+
         # do training
         start_loop = perf_counter()
-        loss_curve = []
-        for update in range(num_updates):
+        for update in range(start_update, num_updates):
     
             # sample episodes
             safe_batch = [safe_episodes[i] for i in np.random.randint(len(safe_episodes), size=batch_size)]
             fail_batch = [fail_episodes[i] for i in np.random.randint(len(fail_episodes), size=batch_size)]
 
-            # lead_time = np.random.randint(min(max_lead_time, len(fail_episode)))
-            # lead_time = min(max_lead_time, len(fail_episode))
+            # feed through mu
+            safe_preds = [mu(episode) for episode in safe_batch]
+            fail_preds = [mu(episode) for episode in fail_batch]
 
-            # feed observations through mu: safe decorrelated max-to-max version batched
-            safe_predictions = tr.stack([mu(episode).max() for episode in safe_batch])
-            fail_predictions = tr.stack([mu(episode).max() for episode in fail_batch])
+            # accumulate loss over possible lead times
+            loss = 0.
+            for lead_time in range(1, max_lead_time+1):
+                safe_max = tr.stack([p[:max(1, len(p)-lead_time)].max() for p in safe_preds])
+                fail_max = tr.stack([p[:max(1, len(p)-lead_time)].max() for p in fail_preds])
+                loss = loss + tr.nn.functional.softplus(safe_max[:,None] - fail_max).mean() / max_lead_time
 
-            # loss = tr.nn.functional.relu(safe_predictions[:,None] - fail_predictions).mean()
-            loss = tr.nn.functional.softplus(safe_predictions[:,None] - fail_predictions).mean()
+            # # lead_time = np.random.randint(min(max_lead_time, len(fail_episode)))
+            # # lead_time = min(max_lead_time, len(fail_episode))
+
+            # # feed observations through mu: safe decorrelated max-to-max version batched
+            # # safe_predictions = tr.stack([mu(episode).max() for episode in safe_batch])
+            # # fail_predictions = tr.stack([mu(episode).max() for episode in fail_batch])
+            # safe_predictions = tr.stack([mu(episode[:max(1,len(episode)-max_lead_time)]).max() for episode in safe_batch])
+            # fail_predictions = tr.stack([mu(episode[:max(1,len(episode)-max_lead_time)]).max() for episode in fail_batch])
+
+            # # loss = tr.nn.functional.relu(safe_predictions[:,None] - fail_predictions).mean()
+            # loss = tr.nn.functional.softplus(safe_predictions[:,None] - fail_predictions).mean()
 
             # # feed observations through mu: safe decorrelated version
             # safe_input = safe_episode[np.random.randint(len(safe_episode)-lead_time)]
@@ -125,49 +155,75 @@ if __name__ == "__main__":
     
             # progress report
             if update % report_period == 0:
-                print(f"{update=}: loss={loss.item():.5e}")
+
+                # estimate 'disengage rate' on test split
+                with tr.no_grad():
+                    safe_max = [mu(episode[:max(1,len(episode)-max_lead_time)]).max().item() for episode in safe_episodes_test]
+                    fail_max = [mu(episode[:max(1,len(episode)-max_lead_time)]).max().item() for episode in fail_episodes_test]
+                    tau = min(fail_max)
+                    acc = float(np.mean([(m <= tau) for m in safe_max]))
+
+                accu_curve.append(acc)
+                print(f"{update=}: train loss={loss.item():.5e}, test accuracy = {acc:.3f}")
 
             # checkpointing
             if (update + 1) % checkpoint_period == 0:
                 tr.save(mu.state_dict(), f"{basename}_r{num_rollouts}_lr{learning_rate}_lt{max_lead_time}_u{update+1}.pt")
     
         training_time = perf_counter()-start_loop
-        print(f"Updates done in {training_time:.3f}s ({training_time/num_updates}s per update)")
+        print(f"Updates done in {training_time:.3f}s ({training_time/(num_updates-start_update)}s per update)")
 
-        tr.save((loss_curve, mu.state_dict()), f"{basename}_r{num_rollouts}_lr{learning_rate}_lt{max_lead_time}_trained.pt")
+        tr.save((loss_curve, accu_curve, mu.state_dict(), optimizer.state_dict()), f"{basename}_r{num_rollouts}_lr{learning_rate}_lt{max_lead_time}_trained.pt")
 
     if do_show:
 
         (safe_episodes, fail_episodes, failrate) = tr.load(f"{basename}_buffer.pt", weights_only=True)
-        (loss_curve, mu_state_dict) = tr.load(f"{basename}_r{num_rollouts}_lr{learning_rate}_lt{max_lead_time}_trained.pt", weights_only=True)
+        (loss_curve, accu_curve, mu_state_dict, _) = tr.load(f"{basename}_r{num_rollouts}_lr{learning_rate}_lt{max_lead_time}_trained.pt", weights_only=True)
         mu.load_state_dict(mu_state_dict)
 
         print(f"{failrate=:.3f}")
 
+        safe_split, fail_split = int(train_fraction * len(safe_episodes)), int(train_fraction * len(fail_episodes))
+        safe_episodes, safe_episodes_test = safe_episodes[:safe_split], safe_episodes[safe_split:]
+        fail_episodes, fail_episodes_test = fail_episodes[:fail_split], fail_episodes[fail_split:]
+
         # evaluate trained mu on full buffers
         with tr.no_grad():
-            safe_maxs = [mu(episode).max() for episode in safe_episodes]
-            fail_maxs = [mu(episode).max() for episode in fail_episodes]
-        # safe_leads = tr.tensor([t for episode in safe_episodes for t in reversed(range(len(episode)))])
-        # fail_leads = tr.tensor([t for episode in fail_episodes for t in reversed(range(len(episode)))])
+            safe_maxs = [mu(episode[:max(1, len(episode)-max_lead_time)]).max() for episode in safe_episodes]
+            fail_maxs = [mu(episode[:max(1, len(episode)-max_lead_time)]).max() for episode in fail_episodes]
+            safe_maxs_test = [mu(episode[:max(1, len(episode)-max_lead_time)]).max() for episode in safe_episodes_test]
+            fail_maxs_test = [mu(episode[:max(1, len(episode)-max_lead_time)]).max() for episode in fail_episodes_test]
 
-        # loss trendline
-        buckets = np.array(loss_curve).reshape(-1, bucket_size).mean(axis=1)
+        # trendlines
+        loss_buckets = np.array(loss_curve).reshape(-1, loss_bucket_size).mean(axis=1)
+        accu_buckets = np.array(accu_curve).reshape(-1, accu_bucket_size).mean(axis=1)
     
-        pt.subplot(1,2,1)
+        pt.subplot(1,4,1)
         pt.plot(loss_curve, '-', color=(.8,)*3)
-        pt.plot(np.arange(len(buckets))*bucket_size + bucket_size/2, buckets, 'k-')
+        pt.plot(np.arange(len(loss_buckets))*loss_bucket_size + loss_bucket_size/2, loss_buckets, 'k-')
         pt.xlabel("Update")
-        pt.ylabel("MSE")
+        pt.ylabel("Train MSE")
         pt.yscale("log")
-        pt.subplot(1,2,2)
-        # pt.plot(fail_leads[:1000], fail_predictions[:1000], 'r.', alpha=.5, label="fail")
-        # pt.plot(safe_leads[:1000], safe_predictions[:1000], 'b.', alpha=.5, label="safe")
+        pt.subplot(1,4,2)
+        pt.plot(accu_curve, '-', color=(.8,)*3)
+        pt.plot(np.arange(len(accu_buckets))*accu_bucket_size + accu_bucket_size/2, accu_buckets, 'k-')
+        pt.xlabel("Update")
+        pt.ylabel("Test Acc")
+        pt.yscale("log")
+        pt.subplot(1,4,3)
         pt.plot([0]*len(fail_maxs), fail_maxs, 'r.', alpha=.5, label="fail")
         pt.plot([1]*len(safe_maxs), safe_maxs, 'b.', alpha=.5, label="safe")
         pt.legend()
-        pt.xlabel("time remaining")
-        pt.ylabel("prediction")
+        pt.xlabel("Time Remaining")
+        pt.ylabel("Prediction")
+        pt.title("Train split")
+        pt.subplot(1,4,4)
+        pt.plot([0]*len(fail_maxs_test), fail_maxs_test, 'r.', alpha=.5, label="fail")
+        pt.plot([1]*len(safe_maxs_test), safe_maxs_test, 'b.', alpha=.5, label="safe")
+        pt.legend()
+        pt.xlabel("Time Remaining")
+        pt.ylabel("Prediction")
+        pt.title("Test split")
         pt.tight_layout()
         pt.show()
 
