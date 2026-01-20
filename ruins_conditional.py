@@ -34,7 +34,7 @@ class EpisodeRunner:
 if __name__ == "__main__":
 
     do_sampling = False
-    do_training = True
+    do_training = False
     do_show = True
 
     # parity with original policy training:
@@ -77,5 +77,5 @@ if __name__ == "__main__":
             tm.train(params, setup_mu)
     
         if do_show:
-            tm.show_results(params, setup_mu, [1])
+            tm.show_results(params, setup_mu, [1, 2, 3, 6, 12])
     

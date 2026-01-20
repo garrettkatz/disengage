@@ -35,6 +35,9 @@ class EpisodeRunner:
     def __call__(self):
         return su.run(self.env, self.model, self.max_episode_length, failure_predicate, perturb_obs=self.perturb_obs)
 
+    def close(self):
+        pass
+
 if __name__ == "__main__":
 
     do_sampling = False

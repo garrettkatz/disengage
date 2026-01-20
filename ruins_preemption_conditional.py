@@ -4,7 +4,7 @@ import numpy as np
 import torch as tr
 import preemption_conditional as pc
 from ruins_conditional import setup_mu, EpisodeRunner
-
+change to cp/ll versions, make sure to close runners, and run failure rates first
 if __name__ == "__main__":
 
     do_conform = True

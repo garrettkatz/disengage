@@ -84,6 +84,8 @@ def conform(params, delta_ratios, setup_mu, run_calib, run_final):
         for d, delta in enumerate(deltas):
             print(f" {failrate=}, {num_updates=}, {delta=}, {num_calibration=}, {rep=}, {final_failure=}, dur={len(final_observations)}, alarms at:", alarm_times[rep, d])
 
+    print(f"\n\n **** {load_mus=}, {train_rep=}, {calib_obs_noise=}, {final_obs_noise=} ***\n\n")
+
     print(f"{failrate=}, {num_updates=}, {num_calibration=}, {deltas=}:")
     sound_alarms =  deploy_failures[:,None,None] & (alarm_times < deploy_durations[:,None,None])
     false_alarms = ~deploy_failures[:,None,None] & (alarm_times < deploy_durations[:,None,None])
