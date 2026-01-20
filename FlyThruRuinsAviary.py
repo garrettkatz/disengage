@@ -122,8 +122,9 @@ class FlyThruRuinsAviary(BaseRLAviary):
         # make sure random initial points are within truncation range:
         # (abs(state[0]) > 1.5 or abs(state[1]) > 1.5 or state[2] > 2.0# Truncate when the drone is too far away
         #      or abs(state[7]) > .4 or abs(state[8]) > .4 # Truncate when the drone is too tilted
-        self.INIT_XYZS = self.base_xyzs + np.random.uniform([-.3, -.3, 0], [+.3, +.3, 0], self.base_xyzs.shape)
-        self.INIT_RPYS = self.base_rpys + np.random.uniform(-.1, .1, self.base_rpys.shape)
+        self.INIT_XYZS = self.base_xyzs + np.random.uniform([-.15, -.15, 0], [+.15, +.15, 0], self.base_xyzs.shape)
+        # self.INIT_RPYS = self.base_rpys + np.random.uniform(-.1, .1, self.base_rpys.shape)
+        self.INIT_RPYS = self.base_rpys # avoid near-immediate failures
         # print(self.INIT_XYZS)
         # input('.')
 
@@ -147,7 +148,8 @@ class FlyThruRuinsAviary(BaseRLAviary):
         """
 
         half_extents = (.25, .01, .75)
-        rgb = (.5, .5, .5)
+        # rgb = (.5, .5, .5)
+        rgb = (188/255, 102/255, 45/255)
         self.obstacle_ids = []
 
         # # random wall placement

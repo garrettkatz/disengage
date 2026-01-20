@@ -10,8 +10,6 @@ from rl_zoo3.exp_manager import ExperimentManager
 from rl_zoo3.utils import get_model_path
 from rl_zoo3.load_from_hub import download_from_hub
 
-# cartpole version with sticky actions
-
 def load(env, alg_name, render=False):
 
     env_name = EnvironmentName(env)
@@ -144,9 +142,7 @@ def load(env, alg_name, render=False):
     return env, model
 
 # @profile
-def run(env, model, n_timesteps, failure_predicate, render=False, stochastic=False, perturb_action=None, init_state=None):
-    # perturb_action(action) should return perturbed action (None is no perturbation)
-    # if provided, lock to provided init state
+def run(env, model, n_timesteps, failure_predicate, render=False, stochastic=False, perturb_action=None, perturb_obs=None, init_state=None):
 
     deterministic = not stochastic
 
@@ -154,6 +150,8 @@ def run(env, model, n_timesteps, failure_predicate, render=False, stochastic=Fal
     if init_state is not None:
         env.set_attr("state", init_state, indices=0)
         obs = init_state
+
+    if perturb_obs is not None: obs = perturb_obs(obs)
 
     observations = [obs]
     actions = []
@@ -164,7 +162,7 @@ def run(env, model, n_timesteps, failure_predicate, render=False, stochastic=Fal
     lstm_states = None
     episode_start = np.ones((env.num_envs,), dtype=bool)
 
-    for timestep in range(n_timesteps):
+    for timestep in range(1, n_timesteps):
 
         with tr.no_grad():
             action, lstm_states = model.predict(
@@ -174,63 +172,66 @@ def run(env, model, n_timesteps, failure_predicate, render=False, stochastic=Fal
                 deterministic=deterministic,
             )
 
-        if perturb_action is not None:
-            action = perturb_action(action)
+        if perturb_action is not None: action = perturb_action(action)
 
         obs, reward, done, infos = env.step(action)    
         episode_start = done
+        ep_rew += reward[0]
+        ep_len += 1
+
+        # this is needed to get true final observation since env is vectorized
+        if done[0]: obs[0] = infos[0]["terminal_observation"]
+
+        failure = failure_predicate(env, obs, reward, done, infos)
+
+        # perturb after checking failure
+        if perturb_obs is not None: obs = perturb_obs(obs)
 
         observations.append(obs)
         actions.append(action)
 
+        if failure or done[0]: break
         if render: env.render("human")
-
-        ep_rew += reward[0]
-        ep_len += 1
-
-        failure = failure_predicate(env, obs, reward, done, infos)
-        if failure: done = True
-
-        if done: break
 
     return failure, ep_rew, ep_len, observations, actions
 
 if __name__ == "__main__":
 
-    # env = "LunarLander-v3"
-    # algo = "a2c"
-    # n_timesteps = 1000
-    # render = True
-    # perturb_action = None
-    # def failure_predicate(env, obs, reward, done, infos): return (reward[0] == -100)
+    env = "LunarLander-v3"
+    algo = "a2c"
+    n_timesteps = 1000
+    render = True
+    perturb_action = None
+    perturb_obs = None
+    def failure_predicate(env, obs, reward, done, infos): return (reward[0] == -100)
 
-    env = "CartPole-v1"
-    algo = "dqn"
-    n_timesteps = 499 # 500-1 ensures max timestep termination does not get counted as failure
-    render = False
-    def perturb_action(a):
-        if np.random.rand() < .05: a = 1 - a # some chance of flipping action from 0 to 1:
-        return a
-        # # a=0: p=(.9, .1)
-        # # a=1: p=(.1, .9)
-        # # a=?: p=(.9 - .8*a, .1 + .8*a)
-        # a = a[0]
-        # return np.random.choice((0,1), size=(1,), p=(.9-.8*a, .1+.8*a))
-    def failure_predicate(env, obs, reward, done, infos):
-        # Farama docs say fail when:
-        # Pole Angle is greater than ±12°
-        # Termination: Cart Position is greater than ±2.4 
-        return done[0] # but for some reason episode can terminate early even when following is not satisfied
-        # pos, ang = obs[0,0], obs[0,2]
-        # print('fp', pos, ang)
-        # return (abs(ang) >= .2095) or (abs(pos) >= 2.4)
+    # env = "CartPole-v1"
+    # algo = "dqn"
+    # n_timesteps = 500
+    # render = True
+    # def perturb_action(a):
+    #     if np.random.rand() < .05: a = 1 - a # some chance of flipping action from 0 to 1:
+    #     return a
+    #     # # a=0: p=(.9, .1)
+    #     # # a=1: p=(.1, .9)
+    #     # # a=?: p=(.9 - .8*a, .1 + .8*a)
+    #     # a = a[0]
+    #     # return np.random.choice((0,1), size=(1,), p=(.9-.8*a, .1+.8*a))
+    # def perturb_obs(o):
+    #     return o * np.random.uniform(.5, 1.5, size=o.shape)
+    # def failure_predicate(env, obs, reward, done, infos):
+    #     # Farama docs say fail when:
+    #     # Cart Position is greater than ±2.4 
+    #     # Pole Angle is greater than ±12°
+    #     pos, ang = obs[0,0], obs[0,2]
+    #     return (abs(pos) >= 2.4) or (abs(ang) >= .2095)
 
     env, model = load(env, algo, render)
     print(env)
     # print(model.q_net) # dqn
 
     failure, ep_rew, ep_len, observations, actions = run(
-        env, model, n_timesteps, failure_predicate, render, stochastic=False, perturb_action=perturb_action)
+        env, model, n_timesteps, failure_predicate, render, stochastic=False, perturb_action=None, perturb_obs=perturb_obs)
 
     print(f"{len(observations)} timesteps, last obs:")
     print(observations[-1])

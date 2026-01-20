@@ -83,7 +83,7 @@ def train():
 
         episode_start_time = time.time()
         current_ep_reward = 0
-        for i in range((env.EPISODE_LEN_SEC)*env.CTRL_FREQ):
+        for i in range(1, (env.EPISODE_LEN_SEC)*env.CTRL_FREQ):
             action = ppo_agent.select_action(obs)
             action = np.expand_dims(action, axis=0)
             obs, reward, terminated, truncated, info = env.step(action)

@@ -61,21 +61,23 @@ def load(checkpoint_name, render=False):
     return env, ppo_agent
 
 # @profile
-def run(env, ppo_agent, render=False):
+def run(env, ppo_agent, perturb_obs=None, render=False):
 
     # obs, info = env.reset(seed=42, options={})
     obs, info = env.reset()
 
+    if perturb_obs is not None: obs = perturb_obs(obs)
+
     observations = [obs]
     actions = []
 
-    ep_rew = ep_len = 0
+    ep_rew = 0
+    ep_len = 1
     start_time = datetime.now().replace(microsecond=0)
     start = time.time()
     failed = False
 
-    # for i in range((env.EPISODE_LEN_SEC+20)*env.CTRL_FREQ):
-    for i in range(env.EPISODE_LEN_SEC*env.CTRL_FREQ):
+    for i in range(1, env.EPISODE_LEN_SEC*env.CTRL_FREQ):
         ep_len += 1
 
         with tr.no_grad():
@@ -85,6 +87,9 @@ def run(env, ppo_agent, render=False):
         obs, reward, terminated, truncated, info = env.step(action)
         failed = env.failure_predicate()
         ep_rew += reward
+
+        # perturb after checking failure
+        if perturb_obs is not None: obs = perturb_obs(obs)
 
         observations.append(obs)
         actions.append(action)
@@ -109,13 +114,18 @@ def run(env, ppo_agent, render=False):
 if __name__ == "__main__":
     # model, _ = load_model("a2c", "LunarLander-v3")
 
-    render = True
+    render = False
 
-    env, model = load("23087_ppo_drone", render)
+    # env, model = load("23087_ppo_drone", render)
+    env, model = load("41652_ppo_drone", render)
     print(env)
-    print(model)
+    print(model.policy)
+    # input('.')
 
-    failure, ep_rew, ep_len, observations, actions = run(env, model, render)
+    def perturb_obs(o):
+        return o * np.random.uniform(1 - .05, 1 + .05, size=o.shape)
 
-    input(f"{failure=:b}")
+    for rep in range(100):
+        failure, ep_rew, ep_len, observations, actions = run(env, model, perturb_obs, render)
+        print(f"{failure=:b} (dur={ep_len}={len(observations)})")
 

@@ -10,7 +10,7 @@ from humanoid_bench.mjx.envs.cpu_env import HumanoidNumpyEnv
 import tqdm
 from humanoid_bench.mjx.video_utils import save_numpy_as_video, make_grid_video_from_numpy
 
-RELATIVE_NOISE = .5 # maximum percent change in perturbed action magnitudes
+RELATIVE_NOISE = 0 #.5 # maximum percent change in perturbed action magnitudes
 
 def load():
 
@@ -35,11 +35,13 @@ def load():
 
     return env, torch_policy
 
-def run(env, torch_policy, num_timesteps, failure_predicate, render=False):
+def run(env, torch_policy, num_timesteps, failure_predicate, perturb_obs=None, render=False):
 
     data_path = os.environ["HOME"] + '/humanoid-bench/data/reach_one_hand/'
     
     state = env.reset()
+
+    if perturb_obs is not None: state = perturb_obs(state)
     
     if render:
 
@@ -51,7 +53,7 @@ def run(env, torch_policy, num_timesteps, failure_predicate, render=False):
         observations = [state]
         actions = []
 
-        i = 0
+        i = 1
         ep_rew = 0
         video = []
         while True:
@@ -61,6 +63,9 @@ def run(env, torch_policy, num_timesteps, failure_predicate, render=False):
             ep_rew += reward
             i += 1
             failure = failure_predicate(env, state, reward, done, info)
+
+            # perturb after checking failure
+            if perturb_obs is not None: state = perturb_obs(state)
 
             observations.append(state)
             actions.append(action)
@@ -83,7 +88,7 @@ def run(env, torch_policy, num_timesteps, failure_predicate, render=False):
         observations = [state]
         actions = []
 
-        i = 0
+        i = 1
         ep_rew = 0
         while True:
             action = torch_policy(state)
@@ -94,28 +99,42 @@ def run(env, torch_policy, num_timesteps, failure_predicate, render=False):
             ep_rew += reward
             i += 1
 
+            failure = failure_predicate(env, state, reward, done, info)
+
+            # perturb after checking failure
+            if perturb_obs is not None: state = perturb_obs(state)
+
             observations.append(state)
             actions.append(action)
 
-            failure = failure_predicate(env, state, reward, done, info)
             if done or failure or i >= num_timesteps: break
 
     ep_len = i
+
+    # unsqueeze observations for consistency with other environments
+    observations = [obs[None,:] for obs in observations]
 
     return failure, ep_rew, ep_len, observations, actions
 
 if __name__ == '__main__':
 
     env, model = load()
-    render = False
+    render = True
+    obs_noise = .125
+
     def failure_predicate(env, obs, reward, done, info): return done
 
-    for r in range(100):
+    def perturb_obs(o):
+        return o * np.random.uniform(1 - obs_noise, 1 + obs_noise, size=o.shape)
+
+    failures = []
+    for r in range(20):
         failure, ep_rew, ep_len, observations, actions = run(
-            env, model, num_timesteps=500, failure_predicate=failure_predicate, render=render)
-        print(r, ep_rew, ep_len)
-        if failure: break
+            env, model, num_timesteps=500, failure_predicate=failure_predicate, perturb_obs=perturb_obs, render=render)
+        failures.append(failure)
+        print(f"{r=}: {failure=:b} ({ep_rew} reward, {ep_len} duration)")
+        # if failure: break
 
     print(observations[-1])
     print(observations[-1].shape)
-
+    print(f"failure rate = {np.mean(failures)}")
