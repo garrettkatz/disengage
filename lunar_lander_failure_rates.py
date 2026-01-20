@@ -7,7 +7,7 @@ if __name__ == "__main__":
     max_episode_length = 1000
     obs_noises = [.1, .2, .3]
 
-    failures = np.empty((len(obs_noises), num_rollouts), dtype=int)
+    failures = np.empty((len(obs_noises), num_rollouts), dtype=bool)
     durations = np.empty((len(obs_noises), num_rollouts), dtype=int)
 
     for n, obs_noise in enumerate(obs_noises):

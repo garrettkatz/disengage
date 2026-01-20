@@ -119,8 +119,8 @@ def run(env, torch_policy, num_timesteps, failure_predicate, perturb_obs=None, r
 if __name__ == '__main__':
 
     env, model = load()
-    render = True
-    obs_noise = .125
+    render = False
+    obs_noise = .3
 
     def failure_predicate(env, obs, reward, done, info): return done
 
@@ -132,7 +132,7 @@ if __name__ == '__main__':
         failure, ep_rew, ep_len, observations, actions = run(
             env, model, num_timesteps=500, failure_predicate=failure_predicate, perturb_obs=perturb_obs, render=render)
         failures.append(failure)
-        print(f"{r=}: {failure=:b} ({ep_rew} reward, {ep_len} duration)")
+        print(f"{r=}: {failure=:b} ({ep_rew} reward, {ep_len}={len(observations)} duration)")
         # if failure: break
 
     print(observations[-1])

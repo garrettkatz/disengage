@@ -1,6 +1,7 @@
 """
 finite markov process
 """
+import itertools as it
 import numpy as np
 import matplotlib.pyplot as pt
 import pickle as pk
@@ -157,6 +158,36 @@ def indicator_mu(fmp, L, delta):
     ufail_rate, flarm_rate = conform(fmp, L, delta, mu)
     return flarm_rate, ufail_rate, mu
 
+def theoretical_lower_bound(fmp, L, delta):
+    P, paths, path_probs, fails, end_times, failrate = fmp
+
+    # enumerate all possible binary alarm masks
+    best_flarm_rate, best_ufail_rate, best_mask = np.inf, None, None
+    for mask in map(np.array, it.product((True, False), repeat=len(P))):
+
+        # rule out any masks that raise the same and more alarms than best so far
+        if best_mask is not None and (mask >= best_mask).all(): continue
+
+        # paths with alarms up to lead time before termination
+        alarms = np.array([mask[p[:int(t)-L+1]].any() for (p, t) in zip(paths, end_times)])
+
+        # unpreempted fail rate: Pr(no alarm to T-L & fail up to T)
+        ufail_rate = path_probs[~alarms & fails, -1].sum()
+
+        # don't consider further if unpreempted failure rate constraint violated
+        if ufail_rate > delta: continue
+
+        # false alarm rate: Pr(alarm up to T-L & non-fail up to T)
+        flarm_rate = path_probs[alarms & ~fails, -1].sum()
+
+        # track any new bests
+        if flarm_rate < best_flarm_rate:
+            best_flarm_rate = flarm_rate
+            best_ufail_rate = ufail_rate
+            best_mask = mask
+
+    return best_flarm_rate, best_ufail_rate, best_mask
+
 def main():
 
     S = 6
@@ -164,9 +195,9 @@ def main():
     L = 2 # lead time
     min_failrate = 0
     delta_ratio = .5
-    guesses = 500
-    num_reps = 50
-    do_reps = True
+    guesses = 50#0
+    num_reps = 30
+    do_reps = False
 
     if do_reps:
 
@@ -175,14 +206,16 @@ def main():
             "random once": np.empty(num_reps),
             "random many": np.empty(num_reps),
             "conditional": np.empty(num_reps),
-            "indicator": np.empty(num_reps),
+            "theoretical": np.empty(num_reps),
+            # "indicator": np.empty(num_reps),
             # "joint": np.empty(num_reps),
         }
         uf_rate = {
             "random once": np.empty(num_reps),
             "random many": np.empty(num_reps),
             "conditional": np.empty(num_reps),
-            "indicator": np.empty(num_reps),
+            "theoretical": np.empty(num_reps),
+            # "indicator": np.empty(num_reps),
             # "joint": np.empty(num_reps),
         }
         for rep in range(num_reps):
@@ -221,10 +254,15 @@ def main():
             print(f"uw: {fa_rate['conditional'][rep]}")
             print(f"uf: {uf_rate['conditional'][rep]}")
 
-            print("\nindicator:")
-            fa_rate["indicator"][rep], uf_rate["indicator"][rep], mu = indicator_mu(fmp, L, delta)
-            print(f"uw: {fa_rate['indicator'][rep]}")
-            print(f"uf: {uf_rate['indicator'][rep]}")
+            print("\ntheoretical:")
+            fa_rate["theoretical"][rep], uf_rate["theoretical"][rep], _ = theoretical_lower_bound(fmp, L, delta)
+            print(f"uw: {fa_rate['theoretical'][rep]}")
+            print(f"uf: {uf_rate['theoretical'][rep]}")
+
+            # print("\nindicator:")
+            # fa_rate["indicator"][rep], uf_rate["indicator"][rep], mu = indicator_mu(fmp, L, delta)
+            # print(f"uw: {fa_rate['indicator'][rep]}")
+            # print(f"uf: {uf_rate['indicator'][rep]}")
 
             # print("\njoint:")
             # fa_rate["joint"][rep], uf_rate["joint"][rep], mu = joint_mu(fmp, L, delta)
@@ -238,19 +276,28 @@ def main():
         (failrate, fa_rate, uf_rate) = pk.load(f)
 
     # labels = ["conditional", "joint", "random once", "random many"]
-    labels = ["conditional", "indicator", "random once", "random many"]
+    # labels = ["conditional", "indicator", "random once", "random many"]
+    labels = ["conditional", "theoretical", "random once", "random many"]
 
     best_rate = np.stack([fa_rate[label] for label in labels]).min(axis=0)
     print("Win rates")
     for label in labels:
         print(label, (fa_rate[label] == best_rate).mean())
 
+    print(f"Conditional < random once {100*(fa_rate['conditional'] < fa_rate['random once']).mean()}% of the time")
+
+    cond_ratio = (fa_rate["conditional"] / fa_rate["theoretical"])
+    rand_ratio = (fa_rate["random once"] / fa_rate["theoretical"])
+    print(f"conditional/theoretical ~ {cond_ratio.mean()} +/- {cond_ratio.std()}")
+    print(f"random once/theoretical ~ {rand_ratio.mean()} +/- {rand_ratio.std()}")
+
     pt.subplot(2,1,1)
     # idx = np.argsort(best_rate)
-    idx = np.argsort(fa_rate["random many"])
+    idx = np.argsort(fa_rate["theoretical"])
     pt.plot(fa_rate["conditional"][idx], 'o', mfc='none', mec='b', label="conditional")
     # pt.plot(fa_rate["joint"][idx], 's', mfc='none', mec='m', label="joint")
-    pt.plot(fa_rate["indicator"][idx], 's', mfc='none', mec='m', label="indicator")
+    # pt.plot(fa_rate["indicator"][idx], 's', mfc='none', mec='m', label="indicator")
+    pt.plot(fa_rate["theoretical"][idx], 'k:', label="theoretical")
     pt.plot(fa_rate["random many"][idx], 'g.', label="random many")
     pt.plot(fa_rate["random once"][idx], 'r+', label="random once")
     # pt.title("Unnecessary warning")
@@ -261,10 +308,11 @@ def main():
     pt.subplot(2,1,2)
     best_rate = np.stack([uf_rate[label] / (failrate * delta_ratio) for label in labels]).min(axis=0)
     # idx = np.argsort(best_rate)
-    idx = np.argsort(uf_rate["random many"] / (failrate * delta_ratio))
+    idx = np.argsort(uf_rate["theoretical"] / (failrate * delta_ratio))
     pt.plot(uf_rate["conditional"][idx] / (failrate[idx] * delta_ratio), 'o', mfc='none', mec='b', label="conditional")
     # pt.plot(uf_rate["joint"][idx] / (failrate[idx] * delta_ratio), 's', mfc='none', mec='m', label="joint")
-    pt.plot(uf_rate["indicator"][idx] / (failrate[idx] * delta_ratio), 's', mfc='none', mec='m', label="indicator")
+    # pt.plot(uf_rate["indicator"][idx] / (failrate[idx] * delta_ratio), 's', mfc='none', mec='m', label="indicator")
+    pt.plot(uf_rate["theoretical"][idx] / (failrate[idx] * delta_ratio), 'k:', label="theoretical")
     pt.plot(uf_rate["random many"][idx] / (failrate[idx] * delta_ratio), 'g.', label="random many")
     pt.plot(uf_rate["random once"][idx] / (failrate[idx] * delta_ratio), 'r+', label="random once")
     pt.ylabel("Unpreemted failure rate / delta")
@@ -280,6 +328,12 @@ def main():
     # pt.legend()
 
     pt.tight_layout()
+    pt.show()
+
+    pt.plot(cond_ratio, rand_ratio, 'k.')
+    pt.plot([1, 1.5], [1, 1.5], 'k:')
+    pt.xlabel("Conditional / Theoretical")
+    pt.ylabel("Random Once / Theoretical")
     pt.show()
 
 
