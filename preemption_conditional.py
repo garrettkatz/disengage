@@ -72,7 +72,7 @@ def conform(params, delta_ratios, setup_mu, run_calib, run_final):
                 print(f" {L=}, {delta=}, {tau=}")
     
                 # check for alarm on final episode
-                alarms = (final_preds[:max(1, len(final_preds)-L)] > tau).numpy()
+                alarms = (final_preds[:max(1, len(final_preds)-L)] >= tau).numpy()
 
                 # save results
                 taus[rep, d, L-1] = tau

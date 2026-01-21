@@ -160,6 +160,9 @@ def train(params, setup_mu):
 
 def show_results(params, setup_mu, Ls):
 
+    pt.rcParams['font.family'] = 'serif'
+    pt.rcParams['font.size'] = 12
+
     buf_rep = params["buf_rep"]
     train_rep = params["train_rep"]
     basename = params["basename"]
@@ -200,18 +203,20 @@ def show_results(params, setup_mu, Ls):
     train_rollouts, valid_rollouts = rollouts[:num_split], rollouts[num_split:]
     train_failures, valid_failures = failures[:num_split], failures[num_split:]
 
+    pt.figure(figsize=(15,3))
+
     # for L in range(1, max_leadtime + 1):
     for i, L in enumerate(Ls):
 
         # loss trendline
         buckets = np.array(loss_curve[L]["train"]).reshape(-1, bucket_size).mean(axis=1)
     
-        pt.subplot(len(Ls), 2, 2*i+1)
+        pt.subplot(2, len(Ls), i+1)
         pt.plot(loss_curve[L]["train"], '-', color=(.8,)*3)
         pt.plot(np.arange(len(buckets))*bucket_size + bucket_size/2, buckets, 'k:', label="train")
         pt.plot(checkpoint_period * np.arange(1, len(loss_curve[L]["valid"])+1), loss_curve[L]["valid"], 'k-', label="valid")
         pt.xlabel("Update")
-        pt.ylabel("MSE")
+        if L==1:pt.ylabel("MSE")
         pt.yscale("log")
         pt.legend()
 
@@ -221,7 +226,7 @@ def show_results(params, setup_mu, Ls):
             predictions = mu[L](current_obs).squeeze()
             targets = next_fail if L==1 else mu[L-1](next_obs).squeeze()
 
-        pt.subplot(len(Ls), 2, 2*i+2)
+        pt.subplot(2, len(Ls), len(Ls) + i + 1)
         pt.plot(predictions, targets, 'k.', alpha=.5)
         pt.plot([0, 1], [0, 1], ':', color=(.8,)*3)
         pt.xlabel("Prediction")

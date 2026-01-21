@@ -192,6 +192,7 @@ class FlyThruRuinsAviary(BaseRLAviary):
         return dist
 
     def failure_predicate(self):
+        trunc = 
         dist = self.collision_distance()
         return dist < .01
 

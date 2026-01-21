@@ -85,7 +85,7 @@ def run(env, ppo_agent, perturb_obs=None, render=False):
 
         action = np.expand_dims(action, axis=0)
         obs, reward, terminated, truncated, info = env.step(action)
-        failed = env.failure_predicate()
+        failed = env.failure_predicate() or (truncated and not terminated)
         ep_rew += reward
 
         # perturb after checking failure
@@ -124,6 +124,7 @@ if __name__ == "__main__":
 
     def perturb_obs(o):
         return o * np.random.uniform(1 - .05, 1 + .05, size=o.shape)
+        # return o * np.random.uniform(1 - 10., 1 + 10., size=o.shape)
 
     for rep in range(100):
         failure, ep_rew, ep_len, observations, actions = run(env, model, perturb_obs, render)

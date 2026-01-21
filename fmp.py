@@ -7,6 +7,10 @@ import matplotlib.pyplot as pt
 import pickle as pk
 
 np.set_printoptions(linewidth=1000)
+# pt.rcParams['ps.fonttype'] = 1
+pt.rcParams['font.family'] = 'serif'
+# input(pt.rcParams["font.size"])
+pt.rcParams['font.size'] = 12
 
 def sample_fmp(S, T, L, min_failrate=0):
 
@@ -58,23 +62,23 @@ def conform(fmp, L, delta, mu, verbose=False):
     # print(paths)
     # print(mu)
 
-    # z: 1 if no failure, else max_{t<=t_F-L} mu_t
+    # z: inf if no failure, else max_{t<=t_F-L} mu_t
     path_zs = np.array([
-        pm[:int(t_F)-L+1].max(axis=0) if fail else 1
+        pm[:int(t_F)-L+1].max(axis=0) if fail else np.inf
         for (pm, t_F, fail) in zip(path_mus, end_times, fails)])
     # print(np.concatenate((path_probs, end_times[:,None], path_zs[:,None]), axis=1))
 
-    # select tau such that: Pr(z <= tau) <= delta
-    # issue warning when mu > tau
+    # select tau such that: Pr(z < tau) <= delta
+    # issue warning when mu >= tau
     z_uni = np.concatenate(([-np.inf], np.unique(path_zs)))
-    z_cdf = np.array([path_probs[path_zs <= z, -1].sum() for z in z_uni])
+    z_cdf = np.array([path_probs[path_zs < z, -1].sum() for z in z_uni])
     tau = z_uni[max(0, (z_cdf > delta).argmax()-1)]
     if verbose:
         print(np.stack([z_uni, z_cdf]))
         print(f"{tau=}")
 
     # paths with warnings up to lead time before termination
-    alarms = np.array([(pm[:int(t)-L+1].max(axis=0) > tau) for (pm, t) in zip(path_mus, end_times)])
+    alarms = np.array([(pm[:int(t)-L+1].max(axis=0) >= tau) for (pm, t) in zip(path_mus, end_times)])
 
     # unpreempted fail rate: Pr(no alarm to T-L & fail up to T)
     ufail_rate = path_probs[~alarms & fails, -1].sum()
@@ -128,9 +132,26 @@ def near_state_mu(fmp, L, delta):
 def conditional_mu(fmp, L, delta):
     # mu(s) = Pr(fail within L steps | s)
     P, paths, path_probs, fails, end_times, failrate = fmp
+
+    # since you can't reach failure in < L steps,
+    # fail within L iff fail in exactly L
     mu = np.array([
         np.linalg.matrix_power(P, L)[s,-1]
         for s in range(len(P))])
+
+    # pSt = np.eye(len(P))[0] # start at s_0 with probability 1
+    # mu = np.eye(len(P))[-1] # fail at 0 has prob 0 except for fail state
+    # print(P)
+    # for t in range(1,L+1):
+    #     pF = pSt[:-1] @ P[:-1, -1] # prob failing for first time at t+1
+    #     mu[:-1] += pF # prob failing for first time up to t+1
+    #     pSt = pSt @ P # update prob S_{t+1} = i
+    #     print("t, prob fail for first time at t, prob fail up to time t, prob state at time t")
+    #     print(t)
+    #     print(pF)
+    #     print(mu)
+    #     print(pSt)
+    # input('.')
 
     ufail_rate, flarm_rate = conform(fmp, L, delta, mu)
     return flarm_rate, ufail_rate, mu
@@ -291,50 +312,74 @@ def main():
     print(f"conditional/theoretical ~ {cond_ratio.mean()} +/- {cond_ratio.std()}")
     print(f"random once/theoretical ~ {rand_ratio.mean()} +/- {rand_ratio.std()}")
 
-    pt.subplot(2,1,1)
+    pt.figure(figsize=(6,3))
+    pt.subplot(1,2,1)
     # idx = np.argsort(best_rate)
     idx = np.argsort(fa_rate["theoretical"])
-    pt.plot(fa_rate["conditional"][idx], 'o', mfc='none', mec='b', label="conditional")
+    pt.plot(fa_rate["conditional"][idx], 'o', mfc='none', mec='b', label="Conditional")
     # pt.plot(fa_rate["joint"][idx], 's', mfc='none', mec='m', label="joint")
     # pt.plot(fa_rate["indicator"][idx], 's', mfc='none', mec='m', label="indicator")
-    pt.plot(fa_rate["theoretical"][idx], 'k:', label="theoretical")
-    pt.plot(fa_rate["random many"][idx], 'g.', label="random many")
-    pt.plot(fa_rate["random once"][idx], 'r+', label="random once")
-    # pt.title("Unnecessary warning")
-    pt.ylabel("False alarm rate")
+    pt.plot(fa_rate["theoretical"][idx], 'k:', label="Theoretical")
+    # pt.plot(fa_rate["random many"][idx], 'g.', label="random many")
+    # pt.plot(fa_rate["random once"][idx], 'r+', label="random once")
+    pt.xlabel("Sorted Examples")
+    pt.ylabel("False Alarm Rate")
     # pt.ylabel("Rate")
-    # pt.legend()
-
-    pt.subplot(2,1,2)
-    best_rate = np.stack([uf_rate[label] / (failrate * delta_ratio) for label in labels]).min(axis=0)
-    # idx = np.argsort(best_rate)
-    idx = np.argsort(uf_rate["theoretical"] / (failrate * delta_ratio))
-    pt.plot(uf_rate["conditional"][idx] / (failrate[idx] * delta_ratio), 'o', mfc='none', mec='b', label="conditional")
-    # pt.plot(uf_rate["joint"][idx] / (failrate[idx] * delta_ratio), 's', mfc='none', mec='m', label="joint")
-    # pt.plot(uf_rate["indicator"][idx] / (failrate[idx] * delta_ratio), 's', mfc='none', mec='m', label="indicator")
-    pt.plot(uf_rate["theoretical"][idx] / (failrate[idx] * delta_ratio), 'k:', label="theoretical")
-    pt.plot(uf_rate["random many"][idx] / (failrate[idx] * delta_ratio), 'g.', label="random many")
-    pt.plot(uf_rate["random once"][idx] / (failrate[idx] * delta_ratio), 'r+', label="random once")
-    pt.ylabel("Unpreemted failure rate / delta")
-    # pt.title("Unpreemted failure")
     pt.legend()
 
-    pt.gcf().supxlabel("Experimental repetition (sorted)")
-    # pt.subplot(1,3,3)
-    # for label, style in zip(labels, ("r.", "g.", "b.")):
-    #     pt.plot(fa_rate[label] / failrate, uf_rate[label] / (failrate * delta_ratio), style, label=label)
-    # pt.xlabel("unnecessary warning / fail rate")
-    # pt.ylabel("unpreempted failure / delta")
-    # pt.legend()
+    pt.subplot(1,2,2)
+    pt.hist(fa_rate["conditional"] / fa_rate["theoretical"], bins=20, edgecolor='k', facecolor=(.8,.8,1))
+    pt.ylabel("Frequency")
+    pt.xlabel("Conditional / Theoretical")
 
     pt.tight_layout()
+    pt.savefig("fmp.pdf")
     pt.show()
 
-    pt.plot(cond_ratio, rand_ratio, 'k.')
-    pt.plot([1, 1.5], [1, 1.5], 'k:')
-    pt.xlabel("Conditional / Theoretical")
-    pt.ylabel("Random Once / Theoretical")
-    pt.show()
+    # pt.subplot(2,1,1)
+    # # idx = np.argsort(best_rate)
+    # idx = np.argsort(fa_rate["theoretical"])
+    # pt.plot(fa_rate["conditional"][idx], 'o', mfc='none', mec='b', label="conditional")
+    # # pt.plot(fa_rate["joint"][idx], 's', mfc='none', mec='m', label="joint")
+    # # pt.plot(fa_rate["indicator"][idx], 's', mfc='none', mec='m', label="indicator")
+    # pt.plot(fa_rate["theoretical"][idx], 'k:', label="theoretical")
+    # pt.plot(fa_rate["random many"][idx], 'g.', label="random many")
+    # pt.plot(fa_rate["random once"][idx], 'r+', label="random once")
+    # # pt.title("Unnecessary warning")
+    # pt.ylabel("False alarm rate")
+    # # pt.ylabel("Rate")
+    # # pt.legend()
+
+    # pt.subplot(2,1,2)
+    # best_rate = np.stack([uf_rate[label] / (failrate * delta_ratio) for label in labels]).min(axis=0)
+    # # idx = np.argsort(best_rate)
+    # idx = np.argsort(uf_rate["theoretical"] / (failrate * delta_ratio))
+    # pt.plot(uf_rate["conditional"][idx] / (failrate[idx] * delta_ratio), 'o', mfc='none', mec='b', label="conditional")
+    # # pt.plot(uf_rate["joint"][idx] / (failrate[idx] * delta_ratio), 's', mfc='none', mec='m', label="joint")
+    # # pt.plot(uf_rate["indicator"][idx] / (failrate[idx] * delta_ratio), 's', mfc='none', mec='m', label="indicator")
+    # pt.plot(uf_rate["theoretical"][idx] / (failrate[idx] * delta_ratio), 'k:', label="theoretical")
+    # pt.plot(uf_rate["random many"][idx] / (failrate[idx] * delta_ratio), 'g.', label="random many")
+    # pt.plot(uf_rate["random once"][idx] / (failrate[idx] * delta_ratio), 'r+', label="random once")
+    # pt.ylabel("Unpreemted failure rate / delta")
+    # # pt.title("Unpreemted failure")
+    # pt.legend()
+
+    # pt.gcf().supxlabel("Experimental repetition (sorted)")
+    # # pt.subplot(1,3,3)
+    # # for label, style in zip(labels, ("r.", "g.", "b.")):
+    # #     pt.plot(fa_rate[label] / failrate, uf_rate[label] / (failrate * delta_ratio), style, label=label)
+    # # pt.xlabel("unnecessary warning / fail rate")
+    # # pt.ylabel("unpreempted failure / delta")
+    # # pt.legend()
+
+    # pt.tight_layout()
+    # pt.show()
+
+    # pt.plot(cond_ratio, rand_ratio, 'k.')
+    # pt.plot([1, 1.5], [1, 1.5], 'k:')
+    # pt.xlabel("Conditional / Theoretical")
+    # pt.ylabel("Random Once / Theoretical")
+    # pt.show()
 
 
 if __name__ == "__main__": main()
