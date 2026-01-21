@@ -41,6 +41,7 @@ def conform(params, delta_ratios, setup_mu, run_calib, run_final):
     for rep in range(num_repetitions):
 
         # collect calibration episodes
+        print(f"collecting {num_calibration} episodes...")
         calib_observations, calib_failure = [], []
         for episode in range(num_calibration):
             failure, _, _, observations, _ = run_calib()
@@ -59,7 +60,7 @@ def conform(params, delta_ratios, setup_mu, run_calib, run_final):
             # calibration stats
             calib_predictions = [mu[L](obs).squeeze() for obs in calib_observations]
             z = [(preds[:max(1,len(preds)-L)].max().item() if fail else np.inf) for (preds, fail) in zip(calib_predictions, calib_failure)]
-            z.sort(reverse=True)
+            z.sort(reverse=True) # getting kth smallest, not largest
 
             # predictions on final episode
             final_preds = mu[L](final_observations).squeeze()

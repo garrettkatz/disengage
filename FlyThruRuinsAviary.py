@@ -192,9 +192,15 @@ class FlyThruRuinsAviary(BaseRLAviary):
         return dist
 
     def failure_predicate(self):
-        trunc = 
+
+        # failure due to collision
         dist = self.collision_distance()
-        return dist < .01
+
+        # failure due to tilting
+        state = self._getDroneStateVector(0)
+        tilted = (abs(state[7]) > .4 or abs(state[8]) > .4)
+
+        return (dist < .01) or tilted
 
 
     ################################################################################
@@ -228,7 +234,7 @@ class FlyThruRuinsAviary(BaseRLAviary):
 
         """
         state = self._getDroneStateVector(0)
-        if (abs(state[0]) > 1.5 or abs(state[1]) > 1.5 or state[2] > 2.0# Truncate when the drone is too far away
+        if (abs(state[0]) > 1.5 or abs(state[1]) > 1.5 or state[2] > 2.0 # Truncate when the drone is too far away
              or abs(state[7]) > .4 or abs(state[8]) > .4 # Truncate when the drone is too tilted
         ):
             return True

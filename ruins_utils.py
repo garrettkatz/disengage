@@ -104,6 +104,7 @@ def run(env, ppo_agent, perturb_obs=None, render=False):
             break
 
         if terminated or truncated:
+            # if truncated: print("Trunk!")
             break
 
     # clear buffer

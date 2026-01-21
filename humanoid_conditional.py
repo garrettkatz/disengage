@@ -31,11 +31,14 @@ class EpisodeRunner:
     def __call__(self):
         return hu.run(self.env, self.model, self.max_episode_length, failure_predicate, self.perturb_obs, render=False)
 
+    def close(self):
+        pass
+
 if __name__ == "__main__":
 
     do_sampling = False
-    do_training = True
-    do_show = False
+    do_training = False
+    do_show = True
 
     # parity with original policy training:
     # 2B timesteps in buffer and fed through network
@@ -74,6 +77,6 @@ if __name__ == "__main__":
             tm.train(params, setup_mu)
     
         if do_show:
-            # tm.show_results(params, setup_mu, [1, 5, 10, 25, 50])
-            tm.show_results(params, setup_mu, [1])
+            tm.show_results(params, setup_mu, [1, 2, 5, 10, 25])
+            # tm.show_results(params, setup_mu, [1])
 
