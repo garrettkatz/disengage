@@ -8,7 +8,7 @@ pt.rcParams['font.size'] = 12
 
 if __name__ == "__main__":
 
-    do_rollouts = False
+    do_rollouts = True
     do_show = True
     base = "ru"
 

@@ -20,9 +20,9 @@ def setup_mu():
 
 class EpisodeRunner:
 
-    def __init__(self, obs_noise):
-        # policy_checkpoint_name = "41652_ppo_drone"
-        policy_checkpoint_name = "23087_ppo_drone"
+    def __init__(self, obs_noise, max_episode_length=None):
+        # episode length parameter here for consistency with other envs, but ignored and always 240 for ruins
+        policy_checkpoint_name = "41652_ppo_drone"
         self.env, self.model = ru.load(policy_checkpoint_name, render=False)
         self.perturb_obs = tm.perturb_obs_factory(obs_noise)
 
