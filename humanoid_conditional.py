@@ -32,7 +32,7 @@ class EpisodeRunner:
         return hu.run(self.env, self.model, self.max_episode_length, failure_predicate, self.perturb_obs, render=False)
 
     def close(self):
-        pass
+        self.env.close()
 
 if __name__ == "__main__":
 
