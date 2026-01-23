@@ -120,8 +120,6 @@ def show_results(params, obs_noises, delta_ratios, num_train_reps):
     pt.rcParams['font.family'] = 'serif'
     pt.rcParams['font.size'] = 12
 
-    pt.figure(figsize=(15,3))
-
     basename = params["basename"]
     train_obs_noise = params["train_obs_noise"]
     num_repetitions = params["num_repetitions"]
@@ -129,6 +127,8 @@ def show_results(params, obs_noises, delta_ratios, num_train_reps):
     num_updates = params["num_updates"]
     learning_rate = params["learning_rate"]
     weight_decay = params["weight_decay"]
+
+    pt.figure(figsize=(15,3))
 
     # want to show: some robustness of preemption rate under distribution shift
     for sp, (calib_obs_noise, final_obs_noise) in enumerate(it.combinations_with_replacement(obs_noises, 2)):
@@ -172,41 +172,34 @@ def show_results(params, obs_noises, delta_ratios, num_train_reps):
 
     pt.figure(figsize=(15,3))
 
-    # want to show: average false alarm rates with trained mu are lower than untrained
+    # # want to show: average false alarm rates with trained mu are lower than untrained
     for sp, (calib_obs_noise, final_obs_noise) in enumerate(it.combinations_with_replacement(obs_noises, 2)):
 
-        false_alarms = np.empty((2, 5, num_repetitions, len(delta_ratios), max_leadtime))
-        for (load_mus, train_rep) in it.product((False, True), range(5)):
+        Ls = np.arange(max_leadtime)+1
+        false_alarms = np.empty((num_repetitions, num_train_reps, 2, len(delta_ratios), max_leadtime))
 
-            basename = params["basename"]
-            train_obs_noise = params["train_obs_noise"]
-            # calib_obs_noise = params["calib_obs_noise"]
-            # final_obs_noise = params["final_obs_noise"]
-            max_leadtime = max_leadtime
-            num_updates = params["num_updates"]
-            learning_rate = params["learning_rate"]
-            weight_decay = params["weight_decay"]
-            results_name = f"{basename}_conform_rep{train_rep}_tn{train_obs_noise}_cn{calib_obs_noise}_fn{final_obs_noise}_" +\
-                f"lr{learning_rate}_wd{weight_decay}_lt{max_leadtime}_nu{num_updates}_lm{load_mus}.pkl"
+        # load results across each repetition
+        for rep in range(num_repetitions):
 
-            # load preemption results
+            results_name = f"{basename}_conform_rep{rep}_tn{train_obs_noise}_cn{calib_obs_noise}_fn{final_obs_noise}_" +\
+                f"lr{learning_rate}_wd{weight_decay}_lt{max_leadtime}_nu{num_updates}.pkl"
             with open(results_name, "rb") as f:
-                (failrate, _, deltas, num_calibration, deploy_failures, deploy_durations, alarm_times) = pk.load(f)
-        
-            false_alarms[int(load_mus), train_rep, :, :, :] = ~deploy_failures[:,None,None] & (alarm_times < deploy_durations[:,None,None])
+                (failrate, delta_ratios, deltas, num_calibration, final_failure, final_duration, taus, alarm_times) = pk.load(f)
+
+            # false alarm if not failed and first alarm came at any time before episode end
+            false_alarms[rep] = (not final_failure) & (alarm_times < final_duration)
 
         pt.subplot(1,6,sp+1)
-        rand_mean = false_alarms[0,:,:,0,:].mean(axis=1).mean(axis=0)
-        rand_stdv = false_alarms[0,:,:,0,:].mean(axis=1).std(axis=0)
-        pret_mean = false_alarms[1,:,:,0,:].mean(axis=1).mean(axis=0)
-        pret_stdv = false_alarms[1,:,:,0,:].mean(axis=1).std(axis=0)
-        Ls = np.arange(len(rand_mean))+1
+        # rates are average across conformal reps, then mean/std across training reps
+        rand_mean = false_alarms[:,:,0,0,:].mean(axis=0).mean(axis=0)
+        rand_stdv = false_alarms[:,:,0,0,:].mean(axis=0).std(axis=0)
+        pret_mean = false_alarms[:,:,1,0,:].mean(axis=0).mean(axis=0)
+        pret_stdv = false_alarms[:,:,1,0,:].mean(axis=0).std(axis=0)
         pt.fill_between(Ls, rand_mean-rand_stdv, rand_mean+rand_stdv, color=(1,.5,.5), alpha=.5)
         pt.fill_between(Ls, pret_mean-pret_stdv, pret_mean+pret_stdv, color=(.5,.5,1), alpha=.5)
         pt.plot(Ls, rand_mean, 'ro:', label="random")
         pt.plot(Ls, pret_mean, 'b^-', label="pretrained")
-        # pt.xlabel("L")
-        # pt.ylabel("False Alarm Rate")
+        # pt.plot(Ls, [deltas[0]]*max_leadtime, 'k--', label="delta")
         pt.title(f"calib={calib_obs_noise}, deploy={final_obs_noise}")
 
     pt.legend()
@@ -215,6 +208,49 @@ def show_results(params, obs_noises, delta_ratios, num_train_reps):
     pt.tight_layout()
     pt.savefig(f"{basename}_fa.pdf")
     pt.show()
+
+    # for sp, (calib_obs_noise, final_obs_noise) in enumerate(it.combinations_with_replacement(obs_noises, 2)):
+
+    #     false_alarms = np.empty((2, 5, num_repetitions, len(delta_ratios), max_leadtime))
+    #     for (load_mus, train_rep) in it.product((False, True), range(5)):
+
+    #         basename = params["basename"]
+    #         train_obs_noise = params["train_obs_noise"]
+    #         # calib_obs_noise = params["calib_obs_noise"]
+    #         # final_obs_noise = params["final_obs_noise"]
+    #         max_leadtime = max_leadtime
+    #         num_updates = params["num_updates"]
+    #         learning_rate = params["learning_rate"]
+    #         weight_decay = params["weight_decay"]
+    #         results_name = f"{basename}_conform_rep{train_rep}_tn{train_obs_noise}_cn{calib_obs_noise}_fn{final_obs_noise}_" +\
+    #             f"lr{learning_rate}_wd{weight_decay}_lt{max_leadtime}_nu{num_updates}_lm{load_mus}.pkl"
+
+    #         # load preemption results
+    #         with open(results_name, "rb") as f:
+    #             (failrate, _, deltas, num_calibration, deploy_failures, deploy_durations, alarm_times) = pk.load(f)
+        
+    #         false_alarms[int(load_mus), train_rep, :, :, :] = ~deploy_failures[:,None,None] & (alarm_times < deploy_durations[:,None,None])
+
+    #     pt.subplot(1,6,sp+1)
+    #     rand_mean = false_alarms[0,:,:,0,:].mean(axis=1).mean(axis=0)
+    #     rand_stdv = false_alarms[0,:,:,0,:].mean(axis=1).std(axis=0)
+    #     pret_mean = false_alarms[1,:,:,0,:].mean(axis=1).mean(axis=0)
+    #     pret_stdv = false_alarms[1,:,:,0,:].mean(axis=1).std(axis=0)
+    #     Ls = np.arange(len(rand_mean))+1
+    #     pt.fill_between(Ls, rand_mean-rand_stdv, rand_mean+rand_stdv, color=(1,.5,.5), alpha=.5)
+    #     pt.fill_between(Ls, pret_mean-pret_stdv, pret_mean+pret_stdv, color=(.5,.5,1), alpha=.5)
+    #     pt.plot(Ls, rand_mean, 'ro:', label="random")
+    #     pt.plot(Ls, pret_mean, 'b^-', label="pretrained")
+    #     # pt.xlabel("L")
+    #     # pt.ylabel("False Alarm Rate")
+    #     pt.title(f"calib={calib_obs_noise}, deploy={final_obs_noise}")
+
+    # pt.legend()
+    # pt.gcf().supxlabel("L")
+    # pt.gcf().supylabel("False Alarm Rate")
+    # pt.tight_layout()
+    # pt.savefig(f"{basename}_fa.pdf")
+    # pt.show()
 
 
 # ### save below until:

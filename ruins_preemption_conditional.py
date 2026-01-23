@@ -8,7 +8,7 @@ from ruins_conditional import setup_mu, EpisodeRunner
 
 if __name__ == "__main__":
 
-    do_conform = True
+    do_conform = False
     do_show = True
 
     # don't need gradients now
