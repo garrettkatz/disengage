@@ -1,6 +1,5 @@
 from line_profiler import profile # python -m kernprof -lvr thisfile.py
 from time import perf_counter
-import pickle as pk
 import numpy as np
 import matplotlib.pyplot as pt
 import torch as tr

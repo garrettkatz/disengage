@@ -1,5 +1,5 @@
 # before running, may need to do
-# $ ulimit -n 10000
+# $ ulimit -Sn 1000000
 # to avoid maxing out your open file descriptors.
 import itertools as it
 import pickle as pk
@@ -11,14 +11,14 @@ from humanoid_conditional import setup_mu, EpisodeRunner
 
 if __name__ == "__main__":
 
-    do_conform = True
+    do_conform = False
     do_show = True
 
     # don't need gradients now
     tr.set_grad_enabled(False)
 
     delta_ratios = [.1, .25, .5]
-    obs_noises = [.1]#, .15, .2]
+    obs_noises = [.1, .15, .2]
     num_train_reps = 5
 
     params = {
@@ -39,7 +39,7 @@ if __name__ == "__main__":
         "weight_decay": 10.,
     
         "calib_padding": 0, # this many outliers below tau
-        "num_repetitions": 30,#100, # this many repetitions to estimate preemption rates
+        "num_repetitions": 100, # this many repetitions to estimate preemption rates
 
     }
 
