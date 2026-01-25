@@ -197,38 +197,40 @@ def run(env, model, n_timesteps, failure_predicate, render=False, stochastic=Fal
 
 if __name__ == "__main__":
 
-    env = "LunarLander-v3"
-    algo = "a2c"
-    n_timesteps = 1000
-    render = True
-    perturb_action = None
-    perturb_obs = None
-    def failure_predicate(env, obs, reward, done, infos): return (reward[0] == -100)
-
-    # env = "CartPole-v1"
-    # algo = "dqn"
-    # n_timesteps = 500
+    # env = "LunarLander-v3"
+    # algo = "a2c"
+    # n_timesteps = 1000
     # render = True
-    # def perturb_action(a):
-    #     if np.random.rand() < .05: a = 1 - a # some chance of flipping action from 0 to 1:
-    #     return a
-    #     # # a=0: p=(.9, .1)
-    #     # # a=1: p=(.1, .9)
-    #     # # a=?: p=(.9 - .8*a, .1 + .8*a)
-    #     # a = a[0]
-    #     # return np.random.choice((0,1), size=(1,), p=(.9-.8*a, .1+.8*a))
-    # def perturb_obs(o):
-    #     return o * np.random.uniform(.5, 1.5, size=o.shape)
-    # def failure_predicate(env, obs, reward, done, infos):
-    #     # Farama docs say fail when:
-    #     # Cart Position is greater than ±2.4 
-    #     # Pole Angle is greater than ±12°
-    #     pos, ang = obs[0,0], obs[0,2]
-    #     return (abs(pos) >= 2.4) or (abs(ang) >= .2095)
+    # perturb_action = None
+    # perturb_obs = None
+    # def failure_predicate(env, obs, reward, done, infos): return (reward[0] == -100)
+
+    env = "CartPole-v1"
+    algo = "dqn"
+    n_timesteps = 500
+    render = True
+    def perturb_action(a):
+        if np.random.rand() < .05: a = 1 - a # some chance of flipping action from 0 to 1:
+        return a
+        # # a=0: p=(.9, .1)
+        # # a=1: p=(.1, .9)
+        # # a=?: p=(.9 - .8*a, .1 + .8*a)
+        # a = a[0]
+        # return np.random.choice((0,1), size=(1,), p=(.9-.8*a, .1+.8*a))
+    def perturb_obs(o):
+        return o * np.random.uniform(.5, 1.5, size=o.shape)
+    def failure_predicate(env, obs, reward, done, infos):
+        # Farama docs say fail when:
+        # Cart Position is greater than ±2.4 
+        # Pole Angle is greater than ±12°
+        pos, ang = obs[0,0], obs[0,2]
+        return (abs(pos) >= 2.4) or (abs(ang) >= .2095)
 
     env, model = load(env, algo, render)
     print(env)
-    # print(model.q_net) # dqn
+    if algo == "dqn": print(model.q_net)
+    else: print(model.policy) # a2c    
+    input('.')
 
     failure, ep_rew, ep_len, observations, actions = run(
         env, model, n_timesteps, failure_predicate, render, stochastic=False, perturb_action=None, perturb_obs=perturb_obs)

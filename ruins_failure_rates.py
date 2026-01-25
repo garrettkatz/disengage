@@ -13,7 +13,8 @@ if __name__ == "__main__":
     base = "ru"
 
     num_rollouts = 100
-    obs_noises = [.05, .2, .5]
+    # obs_noises = [.05, .1, .15]
+    obs_noises = [.05, .4, .6]
 
     if do_rollouts:
         failures = np.empty((len(obs_noises), num_rollouts), dtype=bool)

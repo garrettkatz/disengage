@@ -2,7 +2,19 @@ import itertools as it
 import pickle as pk
 import numpy as np
 import torch as tr
+from scipy.stats import beta
 import matplotlib.pyplot as pt
+
+def clopper_pearson(alpha, n, k):
+    # Confidence intervals for binomial proportions
+    # k successes out of n trials at alpha confidence level
+    # expects k to be an array, lo/hi bounds are arrays of the same size
+    # based on https://en.wikipedia.org/wiki/Binomial_proportion_confidence_interval#Clopper%E2%80%93Pearson_interval
+    p_lo = beta.ppf(alpha / 2, k, n - k + 1)
+    p_hi = beta.ppf(1 - alpha / 2, k + 1, n - k)
+    p_lo = np.where(np.isnan(p_lo), 0, p_lo)
+    p_hi = np.where(np.isnan(p_hi), 1, p_hi)
+    return p_lo, p_hi
 
 def conform_experiments(params, obs_noises, delta_ratios, num_train_reps, setup_mu, EpisodeRunner):
 
@@ -128,7 +140,7 @@ def show_results(params, obs_noises, delta_ratios, num_train_reps):
     learning_rate = params["learning_rate"]
     weight_decay = params["weight_decay"]
 
-    pt.figure(figsize=(15,3))
+    pt.figure(figsize=(15,5))
 
     # want to show: some robustness of preemption rate under distribution shift
     for sp, (calib_obs_noise, final_obs_noise) in enumerate(it.combinations_with_replacement(obs_noises, 2)):
@@ -150,27 +162,42 @@ def show_results(params, obs_noises, delta_ratios, num_train_reps):
         # # unpreempted if failed and first alarm came at or later than max(1, fail time - L)
         # unpreempted[int(load_mus), train_rep, :, :, :] = deploy_failures[:,None,None] & (alarm_times >= np.maximum(1, deploy_durations[:,None,None] - Ls))
 
-        pt.subplot(1,6,sp+1)
-        # rates are average across conformal reps, then mean/std across training reps
-        rand_mean = unpreempted[:,:,0,0,:].mean(axis=0).mean(axis=0)
-        rand_stdv = unpreempted[:,:,0,0,:].mean(axis=0).std(axis=0)
-        pret_mean = unpreempted[:,:,1,0,:].mean(axis=0).mean(axis=0)
-        pret_stdv = unpreempted[:,:,1,0,:].mean(axis=0).std(axis=0)
-        pt.fill_between(Ls, rand_mean-rand_stdv, rand_mean+rand_stdv, color=(1,.5,.5), alpha=.5)
-        pt.fill_between(Ls, pret_mean-pret_stdv, pret_mean+pret_stdv, color=(.5,.5,1), alpha=.5)
+        # rates are average across conformal reps
+        rand_rate = unpreempted[:,:,0,0,:].mean(axis=0)
+        pret_rate = unpreempted[:,:,1,0,:].mean(axis=0)
+        # mean/stdevs across training reps
+        rand_mean = rand_rate.mean(axis=0)
+        rand_stdv = rand_rate.std(axis=0)
+        pret_mean = pret_rate.mean(axis=0)
+        pret_stdv = pret_rate.std(axis=0)
+        # confidence intervals over conformal reps
+        rand_lo, rand_hi = clopper_pearson(.95, n=num_repetitions, k=unpreempted[:,:,0,0,:].sum(axis=0))
+        pret_lo, pret_hi = clopper_pearson(.95, n=num_repetitions, k=unpreempted[:,:,1,0,:].sum(axis=0))
+        # plot results
+        pt.subplot(2,6,sp+1)
+        # pt.fill_between(Ls, rand_mean-rand_stdv, rand_mean+rand_stdv, color=(1,.5,.5), alpha=.5)
+        # pt.fill_between(Ls, pret_mean-pret_stdv, pret_mean+pret_stdv, color=(.5,.5,1), alpha=.5)
+        pt.fill_between(Ls, rand_lo.min(axis=0), rand_hi.max(axis=0), color=(1,.5,.5), alpha=.5)
+        pt.fill_between(Ls, pret_lo.min(axis=0), pret_hi.max(axis=0), color=(.5,.5,1), alpha=.5)
+        # pt.plot(Ls, rand_rate.T, '-', color=(1,.7,.7))
+        # pt.plot(Ls, pret_rate.T, '-', color=(.7,.7,1))
         pt.plot(Ls, rand_mean, 'ro:', label="random")
-        pt.plot(Ls, pret_mean, 'b^-', label="pretrained")
+        pt.plot(Ls, pret_mean, 'b^-', label="trained")
         pt.plot(Ls, [deltas[0]]*max_leadtime, 'k--', label="delta")
-        pt.title(f"calib={calib_obs_noise}, deploy={final_obs_noise}")
 
-    pt.legend()
-    pt.gcf().supxlabel("L")
-    pt.gcf().supylabel("Unpreempted Failure Rate")
-    pt.tight_layout()
-    pt.savefig(f"{basename}_uf.pdf")
-    pt.show()
+        # pt.title(f"$\\nu_{{calib}}={calib_obs_noise}, \\nu_{{deploy}}={final_obs_noise}$")
+        pt.title(f"({calib_obs_noise}, {final_obs_noise})")
+        pt.xticks([],[])
 
-    pt.figure(figsize=(15,3))
+        if sp==0: pt.ylabel("Unpreempted Failure")
+    # pt.legend()
+    # pt.gcf().supxlabel("L")
+    # pt.gcf().supylabel("Unpreempted Failure Rate")
+    # pt.tight_layout()
+    # pt.savefig(f"{basename}_uf.pdf")
+    # pt.show()
+
+    # pt.figure(figsize=(15,3))
 
     # # want to show: average false alarm rates with trained mu are lower than untrained
     for sp, (calib_obs_noise, final_obs_noise) in enumerate(it.combinations_with_replacement(obs_noises, 2)):
@@ -189,24 +216,52 @@ def show_results(params, obs_noises, delta_ratios, num_train_reps):
             # false alarm if not failed and first alarm came at any time before episode end
             false_alarms[rep] = (not final_failure) & (alarm_times < final_duration)
 
-        pt.subplot(1,6,sp+1)
-        # rates are average across conformal reps, then mean/std across training reps
-        rand_mean = false_alarms[:,:,0,0,:].mean(axis=0).mean(axis=0)
-        rand_stdv = false_alarms[:,:,0,0,:].mean(axis=0).std(axis=0)
-        pret_mean = false_alarms[:,:,1,0,:].mean(axis=0).mean(axis=0)
-        pret_stdv = false_alarms[:,:,1,0,:].mean(axis=0).std(axis=0)
-        pt.fill_between(Ls, rand_mean-rand_stdv, rand_mean+rand_stdv, color=(1,.5,.5), alpha=.5)
-        pt.fill_between(Ls, pret_mean-pret_stdv, pret_mean+pret_stdv, color=(.5,.5,1), alpha=.5)
+        # rates are average across conformal reps
+        rand_rate = false_alarms[:,:,0,0,:].mean(axis=0)
+        pret_rate = false_alarms[:,:,1,0,:].mean(axis=0)
+        # mean/stdevs across training reps
+        rand_mean = rand_rate.mean(axis=0)
+        rand_stdv = rand_rate.std(axis=0)
+        pret_mean = pret_rate.mean(axis=0)
+        pret_stdv = pret_rate.std(axis=0)
+        # confidence intervals over training reps
+        rand_lo, rand_hi = clopper_pearson(.95, n=num_repetitions, k=false_alarms[:,:,0,0,:].sum(axis=0))
+        pret_lo, pret_hi = clopper_pearson(.95, n=num_repetitions, k=false_alarms[:,:,1,0,:].sum(axis=0))
+
+        # plot results
+        pt.subplot(2,6,6+sp+1)
+        # pt.fill_between(Ls, rand_mean-rand_stdv, rand_mean+rand_stdv, color=(1,.5,.5), alpha=.5)
+        # pt.fill_between(Ls, pret_mean-pret_stdv, pret_mean+pret_stdv, color=(.5,.5,1), alpha=.5)
+        pt.fill_between(Ls, rand_lo.min(axis=0), rand_hi.max(axis=0), color=(1,.5,.5), alpha=.5)
+        pt.fill_between(Ls, pret_lo.min(axis=0), pret_hi.max(axis=0), color=(.5,.5,1), alpha=.5)
+        # pt.plot(Ls, rand_rate.T, '-', color=(1,.7,.7))
+        # pt.plot(Ls, pret_rate.T, '-', color=(.7,.7,1))
         pt.plot(Ls, rand_mean, 'ro:', label="random")
-        pt.plot(Ls, pret_mean, 'b^-', label="pretrained")
-        # pt.plot(Ls, [deltas[0]]*max_leadtime, 'k--', label="delta")
-        pt.title(f"calib={calib_obs_noise}, deploy={final_obs_noise}")
+        pt.plot(Ls, pret_mean, 'b^-', label="trained")
+
+        pt.subplot(2,6,6+sp+1)
+        # # rates are average across conformal reps, then mean/std across training reps
+        # rand_mean = false_alarms[:,:,0,0,:].mean(axis=0).mean(axis=0)
+        # rand_stdv = false_alarms[:,:,0,0,:].mean(axis=0).std(axis=0)
+        # pret_mean = false_alarms[:,:,1,0,:].mean(axis=0).mean(axis=0)
+        # pret_stdv = false_alarms[:,:,1,0,:].mean(axis=0).std(axis=0)
+        # pt.fill_between(Ls, rand_mean-rand_stdv, rand_mean+rand_stdv, color=(1,.5,.5), alpha=.5)
+        # pt.fill_between(Ls, pret_mean-pret_stdv, pret_mean+pret_stdv, color=(.5,.5,1), alpha=.5)
+        # pt.plot(Ls, rand_mean, 'ro:', label="random")
+        # pt.plot(Ls, pret_mean, 'b^-', label="trained")
+        # # pt.plot(Ls, [deltas[0]]*max_leadtime, 'k--', label="delta")
+        # # pt.title(f"calib={calib_obs_noise}, deploy={final_obs_noise}")
+
+        if sp==0: pt.ylabel("False Alarm")
 
     pt.legend()
     pt.gcf().supxlabel("L")
-    pt.gcf().supylabel("False Alarm Rate")
+    # pt.gcf().supylabel("False Alarm Rate")
+    pt.gcf().supylabel("Rates")
+    pt.gcf().suptitle(f"$(\\nu_{{calib}}, \\nu_{{deploy}})$")
     pt.tight_layout()
-    pt.savefig(f"{basename}_fa.pdf")
+    # pt.savefig(f"{basename}_fa.pdf")
+    pt.savefig(f"{basename}_uf_fa.pdf")
     pt.show()
 
     # for sp, (calib_obs_noise, final_obs_noise) in enumerate(it.combinations_with_replacement(obs_noises, 2)):

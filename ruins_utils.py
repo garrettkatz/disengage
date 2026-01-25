@@ -115,7 +115,7 @@ def run(env, ppo_agent, perturb_obs=None, render=False):
 if __name__ == "__main__":
     # model, _ = load_model("a2c", "LunarLander-v3")
 
-    render = False
+    render = True
 
     # env, model = load("23087_ppo_drone", render)
     env, model = load("41652_ppo_drone", render)
@@ -130,4 +130,5 @@ if __name__ == "__main__":
     for rep in range(100):
         failure, ep_rew, ep_len, observations, actions = run(env, model, perturb_obs, render)
         print(f"{failure=:b} (dur={ep_len}={len(observations)})")
+        input('.')
 
