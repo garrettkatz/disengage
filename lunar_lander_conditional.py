@@ -9,7 +9,7 @@ import train_mu_conditional as tm
 
 def setup_mu():
     # MLP - same architecture as critic
-    num_hidden = 256
+    num_hidden = 64
     return tr.nn.Sequential(
         tr.nn.Linear(in_features=8, out_features=num_hidden, bias=True),
         tr.nn.Tanh(),
@@ -63,7 +63,7 @@ if __name__ == "__main__":
             "valid_batch_size": 20_000, # ~20 rollouts
     
             "learning_rate": 1e-3,
-            "weight_decay": .5,
+            "weight_decay": .2,
             "train_fraction": .8, # fraction of rollouts used for training
     
             "report_period": None,

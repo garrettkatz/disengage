@@ -7,7 +7,7 @@ pt.rcParams['font.size'] = 12
 
 envs = {
     "Cart Pole": ("cp", .4, 1e-5, .5, 25, 25000),
-    "Lunar Lander": ("ll", .1, 1e-3, .5, 50, 5000),
+    "Lunar Lander": ("ll", .1, 1e-3, .2, 50, 5000),
     "Humanoid Bench": ("hu", .1, 1e-4, 10., 25, 10_400),
     "Ruins": ("ru", .05, 5e-3, .2, 12, 10_400),
 }

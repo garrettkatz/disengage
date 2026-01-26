@@ -8,14 +8,14 @@ from ruins_conditional import setup_mu, EpisodeRunner
 
 if __name__ == "__main__":
 
-    do_conform = False
+    do_conform = True
     do_show = True
 
     # don't need gradients now
     tr.set_grad_enabled(False)
 
     delta_ratios = [.1, .25, .5]
-    obs_noises = [.05, .1, .15]
+    obs_noises = [.05, .4, .6]
     num_train_reps = 5
 
     params = {

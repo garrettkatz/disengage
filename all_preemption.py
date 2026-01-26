@@ -9,7 +9,7 @@ pt.rcParams['font.size'] = 12
 
 envs = {
     "Cart Pole": ("cp", [.4, .5, .6], 1e-5, .5, 25, 25000),
-    "Lunar Lander": ("ll", [.1, .2, .3], 1e-3, .5, 50, 5000),
+    "Lunar Lander": ("ll", [.1, .2, .3], 1e-3, .2, 50, 5000),
     "Humanoid Bench": ("hu", [.1, .15, .2], 1e-4, 10., 25, 10_400),
     # "Ruins": ("ru", [.05, .2, .5], 5e-3, .2, 12, 10_400),
     "Ruins": ("ru", [.05, .1, .15], 5e-3, .2, 12, 10_400),
@@ -81,7 +81,7 @@ for sp, (title, (base, obs_noises, learning_rate, weight_decay, max_leadtime, nu
     pt.subplot(2, len(envs), len(envs)+sp+1)
     pt.bar(np.arange(6), height=effective_leadtime, edgecolor='k', facecolor=(.8,.8,1), align="edge")
     pt.plot([0,6], [Ls.max()]*2, 'k:')
-    pt.xticks(np.arange(6)+.4, [str(tuple(c)) for c in combos], rotation=90)
+    pt.xticks(np.arange(6)+.4, [str(tuple(map(float,c))) for c in combos], rotation=90)
     # pt.title(title)
     if sp == 0: pt.ylabel("Effective\nLead Time")
 

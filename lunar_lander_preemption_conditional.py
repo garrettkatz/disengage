@@ -8,7 +8,7 @@ from lunar_lander_conditional import setup_mu, EpisodeRunner
 
 if __name__ == "__main__":
 
-    do_conform = False
+    do_conform = True
     do_show = True
 
     # don't need gradients now
@@ -33,7 +33,7 @@ if __name__ == "__main__":
         "max_leadtime": 50,
         "num_updates": 5000,
         "learning_rate": 1e-3,
-        "weight_decay": .5,
+        "weight_decay": .2,
     
         "calib_padding": 0, # this many outliers below tau
         "num_repetitions": 100, # this many repetitions to estimate preemption rates
