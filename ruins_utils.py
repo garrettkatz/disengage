@@ -15,6 +15,8 @@ from gym_pybullet_drones.utils.utils import sync, str2bool
 from gym_pybullet_drones.utils.enums import ObservationType, ActionType
 from ppo import PPO
 
+np.set_printoptions(linewidth=100)
+
 def load(checkpoint_name, render=False):
 
     ################## hyperparameters ##################

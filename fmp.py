@@ -11,6 +11,7 @@ np.set_printoptions(linewidth=1000)
 pt.rcParams['font.family'] = 'serif'
 # input(pt.rcParams["font.size"])
 pt.rcParams['font.size'] = 12
+pt.rcParams['pdf.fonttype'] = 42
 
 def sample_fmp(S, T, L, min_failrate=0):
 

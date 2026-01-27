@@ -15,7 +15,8 @@ if __name__ == "__main__":
     tr.set_grad_enabled(False)
 
     delta_ratios = [.1, .25, .5]
-    obs_noises = [.05, .4, .6]
+    # obs_noises = [.05, .4, .6]
+    obs_noises = [.05, .25, .5]
     num_train_reps = 5
 
     params = {

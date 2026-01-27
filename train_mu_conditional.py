@@ -184,9 +184,9 @@ def show_results(params, setup_mu, Ls):
     (_, loss_curve, early_stops, mu_state_dicts) = tr.load(f"{train_basename}_trained.pt", weights_only=True)
     mu = {} 
     print(f"{failrate=:.3f}")
-    print("early stops:")
+    print("early stops, valid losses:")
     for L in range(1, max_leadtime+1):
-        print(L, early_stops[L])
+        print(L, early_stops[L], min(loss_curve[L]["valid"]))
         mu[L] = setup_mu()
         mu[L].load_state_dict(mu_state_dicts[L])
 
@@ -215,9 +215,11 @@ def show_results(params, setup_mu, Ls):
         pt.plot(np.arange(len(buckets))*bucket_size + bucket_size/2, buckets, 'k:', label="train")
         pt.plot(checkpoint_period * np.arange(1, len(loss_curve[L]["valid"])+1), loss_curve[L]["valid"], 'k-', label="valid")
         pt.xlabel("Update")
-        if L==1:pt.ylabel("MSE")
         pt.yscale("log")
-        pt.legend()
+        pt.title(str(L))
+        if L==1:
+            pt.ylabel("MSE")
+            pt.legend()
 
         # predict on a validation batch for visualization
         with tr.no_grad():

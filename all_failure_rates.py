@@ -4,6 +4,7 @@ import matplotlib.pyplot as pt
 
 pt.rcParams['font.family'] = 'serif'
 pt.rcParams['font.size'] = 14
+pt.rcParams['pdf.fonttype'] = 42
 
 pt.figure(figsize=(8,4))
 
@@ -11,7 +12,7 @@ envs = {
     "Cart Pole": ("cp", [.4, .5, .6]),
     "Lunar Lander": ("ll", [.1, .2, .3]),
     "Humanoid Bench": ("hu", [.1, .15, .2]),
-    "Ruins": ("ru", [.05, .1, .15]),
+    "Ruins": ("ru", [.05, .25, .5]),
 }
 
 for sp, (title, (base, obs_noises)) in enumerate(envs.items()):
@@ -32,14 +33,15 @@ for sp, (title, (base, obs_noises)) in enumerate(envs.items()):
     if sp==0: pt.ylabel("Failure Rate")
 
     pt.subplot(2,len(envs),sp+1+len(envs))
-    parts = pt.violinplot(durations[:,np.random.rand(100) < .1].T, positions=range(len(obs_noises)), points=50, showextrema=False)
+    # parts = pt.violinplot(durations[:,np.random.rand(100) < .1].T, positions=range(len(obs_noises)), points=50, showextrema=False)
+    parts = pt.violinplot(durations.T, positions=range(len(obs_noises)), points=50, showextrema=False)
     for pc in parts["bodies"]:
         pc.set_facecolor((.8,)*3)
         pc.set_edgecolor('none')
         pc.set_alpha(1.)
 
     # subsample points for legibility
-    subsample = (np.random.rand(failures.shape[1]) < .3)
+    subsample = (np.random.rand(failures.shape[1]) < .03) # 30 of 1000
     failures = failures[:,subsample]
     durations = durations[:,subsample]
     for n in range(len(obs_noises)):

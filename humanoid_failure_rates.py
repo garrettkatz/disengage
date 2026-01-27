@@ -12,7 +12,7 @@ if __name__ == "__main__":
     do_show = True
     base = "hu"
 
-    num_rollouts = 100
+    num_rollouts = 1000
     max_episode_length = 500
     obs_noises = [.1, .15, .2]
 

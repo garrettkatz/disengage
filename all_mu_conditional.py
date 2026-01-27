@@ -4,6 +4,7 @@ import torch as tr
 
 pt.rcParams['font.family'] = 'serif'
 pt.rcParams['font.size'] = 12
+pt.rcParams['pdf.fonttype'] = 42
 
 envs = {
     "Cart Pole": ("cp", .4, 1e-5, .5, 25, 25000),
@@ -23,13 +24,15 @@ for sp, (title, (base, obs_noise, learning_rate, weight_decay, max_leadtime, num
     for train_rep in range(num_reps):
         train_basename = f"{base}_data/{base}_cond_train_rep{train_rep}_on{obs_noise}_lr{learning_rate}_wd{weight_decay}_lt{max_leadtime}_nu{num_updates}"
         (_, loss_curve, _, _) = tr.load(f"{train_basename}_trained.pt", weights_only=True)
-        for L in range(1, max_leadtime):
+        for L in range(1, max_leadtime+1):
             valid_loss[train_rep, L-1] = min(loss_curve[L]["valid"])
 
+    print(valid_loss)
+
     pt.subplot(1, len(envs), sp+1)
-    pt.plot(np.arange(max_leadtime)+1, valid_loss.T, '.', color=(.8,)*3)
+    pt.plot(np.arange(max_leadtime)+1, valid_loss.T, '-', color=(.8,)*3)
     pt.plot(np.arange(max_leadtime)+1, valid_loss.mean(axis=0), 'k-')
-    # pt.yscale("log")
+    pt.yscale("log")
     pt.title(title)
     if sp == 0: pt.ylabel("Best Validation Loss")
 

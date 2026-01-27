@@ -8,10 +8,10 @@ pt.rcParams['font.size'] = 12
 
 if __name__ == "__main__":
 
-    do_rollouts = False
+    do_rollouts = True
     do_show = True
 
-    num_rollouts = 100
+    num_rollouts = 1000
     max_episode_length = 500
     obs_noises = [.4, .5, .6]
 
@@ -36,11 +36,11 @@ if __name__ == "__main__":
         print("fail durations:")
         print([d[f].mean() for (d,f) in zip(durations, failures)])
 
-        with open("cp_data/cp_fr.pkl", "wb") as f: pk.dump((failures, durations), f)
+        with open(f"{base}_failrates.pkl", "wb") as f: pk.dump((failures, durations), f)
 
     if do_show:
 
-        with open("cp_data/cp_fr.pkl", "rb") as f: (failures, durations) = pk.load(f)
+        with open(f"{base}_failrates.pkl", "rb") as f: (failures, durations) = pk.load(f)
 
         print("obs_noises:")
         print(obs_noises)

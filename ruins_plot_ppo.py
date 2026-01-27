@@ -3,6 +3,7 @@ import matplotlib.pyplot as pt
 
 pt.rcParams['font.family'] = 'serif'
 pt.rcParams['font.size'] = 12
+pt.rcParams['pdf.fonttype'] = 42
 
 csv = pd.read_csv("ruins_log_dir/PPO_log_ruins.csv")
 print(csv)

@@ -12,9 +12,10 @@ if __name__ == "__main__":
     do_show = True
     base = "ru"
 
-    num_rollouts = 100
+    num_rollouts = 1000
     # obs_noises = [.05, .1, .15]
-    obs_noises = [.05, .4, .6]
+    # obs_noises = [.05, .4, .6]
+    obs_noises = [.05, .25, .5]
 
     if do_rollouts:
         failures = np.empty((len(obs_noises), num_rollouts), dtype=bool)
@@ -24,9 +25,11 @@ if __name__ == "__main__":
     
             run_episode = EpisodeRunner(obs_noise)
             for r in range(num_rollouts):
-                print(n,r)
+                # run_episode = EpisodeRunner(obs_noise)
                 failures[n,r], _, _, observations, _ = run_episode()
                 durations[n,r] = len(observations)
+                print(f"{obs_noise} {r} fail={failures[n,r]}, dur={durations[n,r]}")
+                # run_episode.close()
             run_episode.close()
     
         print("obs_noises:")
@@ -36,11 +39,11 @@ if __name__ == "__main__":
         print("fail durations:")
         print([d[f].mean() for (d,f) in zip(durations, failures)])
 
-        with open(f"{base}_data/{base}_fr.pkl", "wb") as f: pk.dump((failures, durations), f)
+        with open(f"{base}_failrates.pkl", "wb") as f: pk.dump((failures, durations), f)
 
     if do_show:
 
-        with open(f"{base}_data/{base}_fr.pkl", "rb") as f: (failures, durations) = pk.load(f)
+        with open(f"{base}_failrates.pkl", "rb") as f: (failures, durations) = pk.load(f)
 
         print("obs_noises:")
         print(obs_noises)

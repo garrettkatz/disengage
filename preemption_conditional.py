@@ -131,6 +131,7 @@ def show_results(params, obs_noises, delta_ratios, num_train_reps):
 
     pt.rcParams['font.family'] = 'serif'
     pt.rcParams['font.size'] = 12
+    pt.rcParams['pdf.fonttype'] = 42
 
     basename = params["basename"]
     train_obs_noise = params["train_obs_noise"]

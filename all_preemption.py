@@ -6,13 +6,13 @@ import torch as tr
 
 pt.rcParams['font.family'] = 'serif'
 pt.rcParams['font.size'] = 12
+pt.rcParams['pdf.fonttype'] = 42
 
 envs = {
     "Cart Pole": ("cp", [.4, .5, .6], 1e-5, .5, 25, 25000),
     "Lunar Lander": ("ll", [.1, .2, .3], 1e-3, .2, 50, 5000),
     "Humanoid Bench": ("hu", [.1, .15, .2], 1e-4, 10., 25, 10_400),
-    # "Ruins": ("ru", [.05, .2, .5], 5e-3, .2, 12, 10_400),
-    "Ruins": ("ru", [.05, .1, .15], 5e-3, .2, 12, 10_400),
+    "Ruins": ("ru", [.05, .25, .5], 5e-3, .2, 12, 10_400),
 }
 num_train_reps = 5
 num_repetitions = 100
