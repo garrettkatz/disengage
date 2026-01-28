@@ -4,11 +4,11 @@ This repository contains code for the paper:
 
 Conformal Preemption of Failures for Sequential Decision Making. Anonymous et al.
 
-# Installation
+## Installation
 
 The experiments use several existing RL benchmarks with their own dependencies.  We recommend installing these benchmarks and dependencies in their own virtual environments.  These commands worked for us on Ubuntu:
 
-## Stable Baselines 3
+### Stable Baselines 3
 
 First install with
 ```
@@ -32,7 +32,7 @@ $ deactivate
 
 You will need to prepend a relative path in front of `.rlzoo/bin/activate` when running our code from the same directory as this README file.
 
-## Humanoid Bench:
+### Humanoid Bench:
 
 First install with
 ```
@@ -65,15 +65,39 @@ $ deactivate
 
 You will need to prepend a relative path in front of `.humanoid-bench/bin/activate` when running our code from the same directory as this README file.
 
-## gym-pybullet-drones
+### gym-pybullet-drones
 
-We did not use a virtual environment for gym-pybullet-drones, though you may want to.  You can follow the installation instructions at
+We did not use a virtual environment for gym-pybullet-drones, though you may want to.  You can follow the installation instructions [here](https://github.com/utiasDSL/gym-pybullet-drones#installation).
 
-https://github.com/utiasDSL/gym-pybullet-drones#installation
-
-# Running the code
+## Running the code
 
 Paper results can be regenerated with the following scripts, which rely on some other scripts in this repository:
 
-## 
+### Tabular Examples
+
+Run `fmp.py` to generate Figure 2. In the `main()` function set `do_reps=False` to visualize previously generated results, and `do_reps=True` to rerun the experiment before visualization.
+
+### Ruins Policy
+
+Run `train_ruins.py` to retrain a PPO policy from scratch (may take about a day).  Then run `ruins_plot_ppo.py` to plot the reward curve in Figure 4 (right).
+
+After training, determine the model checkpoint you want to use, and update the `policy_checkpoint_name` variable in the `EpisodeRunner` class of `ruins_conditional.py` accordingly.
+
+### Original Failure Rates
+
+Run `[env]_failure_rates.py` to generate the data for Figure 5, where `[env]` is one of `cartpole`, `lunar_lander`, `humanoid`, or `ruins`.  Make sure to activate the respective virtual environments before each one.  The first time, you may also need to create the subdirectories `cp_data`, `ll_data`, `hu_data,` and `ru_data` where results will be saved.
+
+Each script will run 1000 episodes to estimate failure rates which may take about an hour.  To only visualize previously generated results, set the `do_rollouts` variable to `False`.
+
+### Mu Training
+
+Run `[env]_conditional.py` to generate the data for Figure 6, again replacing `[env]` and activating virtual environments accordingly.  Set the variable `do_sampling` to `True` to regenerate episode buffers, and `do_training` to `True` to rerun the training.  Combined these steps may take several hours.
+
+When training is done, run `all_mu_conditional.py` to generate Figure 6.
+
+### Conformal Preemption
+
+Run `[env]_preemption_conditional.py` to generate the data for the remaining figures.  Set the variable `do_conform` to `True` to rerun the experiments and `False` to only visualize previously generated results.  The visualizations are Figures 7 and 9-11.
+
+After regenerating results for all environments, run `all_preemption.py` to create the summary Figure 8.
 
