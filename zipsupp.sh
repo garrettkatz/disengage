@@ -1,4 +1,5 @@
 zip supp.zip \
+README.md \
 fmp.py \
 FlyThruRuinsAviary.py \
 ppo.py \

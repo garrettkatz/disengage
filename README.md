@@ -8,7 +8,12 @@ Conformal Preemption of Failures in Sequential Decision-Making Agents. Anonymous
 
 Our code depends on several common Python libraries for machine learning and scientific computing, including numpy, scipy, pandas, matplotlib, and pytorch, as well as line_profiler, so those will need to be installed.
 
-The experiments use several existing RL benchmarks with their own dependencies which also must be installed.  We recommend installing these benchmarks and dependencies in their own virtual environments.  These commands worked for us on Ubuntu:
+The experiments use several existing RL benchmarks with their own dependencies which also must be installed.  We recommend installing these benchmarks and dependencies in their own virtual environments.  The following steps worked for us on Ubuntu:
+
+### gym-pybullet-drones
+
+We did not use a virtual environment for gym-pybullet-drones, though you may want to.  You can follow the installation instructions [here](https://github.com/utiasDSL/gym-pybullet-drones#installation).
+
 
 ### Stable Baselines 3
 
@@ -36,7 +41,7 @@ You will need to prepend a relative path in front of `.rlzoo/bin/activate` when 
 
 ### Humanoid Bench:
 
-First install with
+First install with the following commands (you will also need uv installed):
 ```
 $ git clone https://github.com/carlosferrazza/humanoid-bench.git
 $ cd humanoid-bench
@@ -66,10 +71,6 @@ $ deactivate
 ```
 
 You will need to prepend a relative path in front of `.humanoid-bench/bin/activate` when running our code from the same directory as this README file.
-
-### gym-pybullet-drones
-
-We did not use a virtual environment for gym-pybullet-drones, though you may want to.  You can follow the installation instructions [here](https://github.com/utiasDSL/gym-pybullet-drones#installation).
 
 ## Running the code
 
