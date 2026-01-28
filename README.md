@@ -6,7 +6,9 @@ Conformal Preemption of Failures in Sequential Decision-Making Agents. Anonymous
 
 ## Installation
 
-The experiments use several existing RL benchmarks with their own dependencies.  We recommend installing these benchmarks and dependencies in their own virtual environments.  These commands worked for us on Ubuntu:
+Our code depends on several common Python libraries for machine learning and scientific computing, including numpy, scipy, pandas, matplotlib, and pytorch, as well as line_profiler, so those will need to be installed.
+
+The experiments use several existing RL benchmarks with their own dependencies which also must be installed.  We recommend installing these benchmarks and dependencies in their own virtual environments.  These commands worked for us on Ubuntu:
 
 ### Stable Baselines 3
 
@@ -91,7 +93,7 @@ Each script will run 1000 episodes to estimate failure rates which may take abou
 
 ### Mu Training
 
-Run `[env]_conditional.py` to generate the data for Figure 6, again replacing `[env]` and activating virtual environments accordingly.  Set the variable `do_sampling` to `True` to regenerate episode buffers, and `do_training` to `True` to rerun the training.  Combined these steps may take several hours.
+Run `[env]_conditional.py` to generate the data for Figure 6, again replacing `[env]` and activating virtual environments accordingly.  Set the variable `do_sampling` to `True` to regenerate episode buffers, and `do_training` to `True` to rerun the training.  Combined these steps may take several hours.  They also save many checkpoints in the `[env]_data` subdirectories, so make sure you have several GB of available space or reduce the `num_update`/`checkpoint_period` variables.
 
 When training is done, run `all_mu_conditional.py` to generate Figure 6.
 
