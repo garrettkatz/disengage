@@ -2,7 +2,7 @@
 
 This repository contains code for the paper:
 
-Conformal Preemption of Failures for Sequential Decision Making. Anonymous et al.
+Conformal Preemption of Failures in Sequential Decision-Making Agents. Anonymous et al.
 
 ## Installation
 
