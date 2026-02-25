@@ -4,6 +4,8 @@ This repository contains code for the paper:
 
 Conformal Preemption of Failures in Sequential Decision-Making Agents. Anonymous et al.
 
+The last commit at the time of paper submission is: 2777f69303fb910bb3ef615d4039c78f6cc33d90 from Jan 28, 2026
+
 ## Installation
 
 Our code depends on several common Python libraries for machine learning and scientific computing, including numpy, scipy, pandas, matplotlib, and pytorch, as well as line_profiler, so those will need to be installed.

@@ -129,6 +129,7 @@ class RandomFlyThruGateAviary(BaseRLAviary):
         return dist
 
 
+
     ################################################################################
 
     def _computeReward(self):

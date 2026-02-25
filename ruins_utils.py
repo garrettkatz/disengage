@@ -7,6 +7,7 @@ import time
 from datetime import datetime
 
 import numpy as np
+import matplotlib.pyplot as pt
 import torch as tr
 
 from gym_pybullet_drones.utils.Logger import Logger
@@ -72,6 +73,7 @@ def run(env, ppo_agent, perturb_obs=None, render=False):
 
     observations = [obs]
     actions = []
+    dep_imgs = []
 
     ep_rew = 0
     ep_len = 1
@@ -99,6 +101,8 @@ def run(env, ppo_agent, perturb_obs=None, render=False):
         if render:
             print(f"timestep {i}: net reward = {ep_rew:.3f}, {terminated=}, {truncated=}, {failed=}")
             env.render()
+            deps = env.depth_sense()
+            dep_imgs.append(deps)
             sync(i, start, env.CTRL_TIMESTEP)
 
         if failed:
@@ -112,7 +116,7 @@ def run(env, ppo_agent, perturb_obs=None, render=False):
     # clear buffer
     ppo_agent.buffer.clear()
 
-    return failed, ep_rew, ep_len, observations, actions
+    return failed, ep_rew, ep_len, (observations, dep_imgs), actions
 
 if __name__ == "__main__":
     # model, _ = load_model("a2c", "LunarLander-v3")
@@ -131,6 +135,20 @@ if __name__ == "__main__":
 
     for rep in range(100):
         failure, ep_rew, ep_len, observations, actions = run(env, model, perturb_obs, render)
+        observations, dep_imgs = observations
         print(f"{failure=:b} (dur={ep_len}={len(observations)})")
+        input('.')
+        
+        pt.figure(figsize=(4,4))
+        pt.ion()
+        pt.show()
+        
+        for t, deps in enumerate(dep_imgs):
+            for d, dep in enumerate(deps): # one channel per drone
+                pt.subplot(1,len(deps),d+1)
+                pt.cla()
+                pt.imshow(dep)
+            pt.pause(0.01)
+
         input('.')
 

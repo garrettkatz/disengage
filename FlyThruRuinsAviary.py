@@ -113,6 +113,8 @@ class FlyThruRuinsAviary(BaseRLAviary):
         self.base_rpys = self.INIT_RPYS.copy()
         self.buggy = buggy
 
+        self.IMG_RES = np.array([64, 48])
+
         self.set_camera()
 
     def reset(self,
@@ -202,6 +204,12 @@ class FlyThruRuinsAviary(BaseRLAviary):
 
         return (dist < .01) or tilted
 
+    def depth_sense(self):
+        # copied from BaseRLAviary _computeObs
+        depth = {}
+        for i in range(self.NUM_DRONES):
+            _, depth[i], _ = self._getDroneImages(i, segmentation=False)
+        return np.array([depth[i] for i in range(self.NUM_DRONES)]).astype('float32')
 
     ################################################################################
 
