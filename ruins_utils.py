@@ -142,6 +142,8 @@ if __name__ == "__main__":
         pt.figure(figsize=(4,4))
         pt.ion()
         pt.show()
+
+        print(f"depth shape = {dep_imgs[0].shape}")
         
         for t, deps in enumerate(dep_imgs):
             for d, dep in enumerate(deps): # one channel per drone
