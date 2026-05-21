@@ -16,6 +16,8 @@ from FlyThruRuinsAviary import FlyThruRuinsAviary
 from gym_pybullet_drones.utils.utils import sync, str2bool
 from gym_pybullet_drones.utils.enums import ObservationType, ActionType
 
+BIN = 8
+
 def train():
 
     DEFAULT_GUI = False
@@ -28,7 +30,7 @@ def train():
     # init agent
 
     ### different from train_ruins.py
-    state_dim = 1*48*64 # depth image size
+    state_dim = 1*48*64 // (BIN**2) # depth image size
 
     action_dim = 4
     action_std = 0.6                    # starting std for action distribution (Multivariate Normal)
@@ -87,7 +89,13 @@ def train():
     while time_step <= max_training_timesteps:
         obs, info = env.reset(seed=42, options={})
         ### different from train_ruins.py
-        obs = env.depth_sense().flatten()
+        # import matplotlib.pyplot as pt
+        # pt.subplot(1,2,1)
+        # pt.imshow(env.depth_sense()[0])
+        # pt.subplot(1,2,2)
+        # pt.imshow(env.depth_sense()[0,::BIN,::BIN])
+        # pt.show()
+        obs = env.depth_sense()[:,::BIN,::BIN].flatten()
 
         episode_start_time = time.time()
         current_ep_reward = 0
@@ -97,7 +105,7 @@ def train():
             obs, reward, terminated, truncated, info = env.step(action)
 
             ### different from train_ruins.py
-            obs = env.depth_sense().flatten()
+            obs = env.depth_sense()[:,::BIN,::BIN].flatten()
 
             done = terminated or truncated
             #print("Obs:", obs, "\tAction", action, "\tReward:", reward, "\tTerminated:", terminated, "\tTruncated:", truncated)
