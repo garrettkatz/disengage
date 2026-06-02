@@ -7,6 +7,7 @@ if __name__ == "__main__":
     import torch as tr
     tr.set_grad_enabled(False) # no training right now
 
+    use_gpu = True
     conformity_model_path = "conformity_model.pt"
     L = 3 # lead time
     tau = .9
@@ -28,6 +29,15 @@ if __name__ == "__main__":
     mu = setup_mu()
     mu.load_state_dict(mu_state_dicts[L])
 
+    cpu = tr.device("cpu")
+    if use_gpu:
+        assert tr.cuda.is_available()
+        device = tr.device("cuda:0")
+        mu.to(device)
+    else:
+        device = cpu
+    print(f"using device {device}")
+
     # networking for host environment
     context = zmq.Context()
     socket = context.socket(zmq.REP)
@@ -35,25 +45,27 @@ if __name__ == "__main__":
     socket.bind("tcp://0.0.0.0:5555")
     print("Jetson Server is ready, waiting for PyBullet states...")
 
-    # get a message
+    # busy loop listening
+    while True:
+        print("Requesting message...")
 
-    # state_buffer = socket.recv(copy=False)
-    # state = np.frombuffer(state_buffer, dtype=np.float64)#.reshape(12)
-    frames = socket.recv_multipart(copy=False)
-    state = np.frombuffer(frames[0], dtype=np.float64)
-    img = np.frombuffer(frames[1], dtype=np.uint8).reshape((48,64))
-    print("Message received:")
-    print(state)
-    print(img[:2,:3])
+        # get the observation message
+        frames = socket.recv_multipart(copy=False)
+        state = np.frombuffer(frames[0], dtype=np.float64)
+        # img = np.frombuffer(frames[1], dtype=np.uint8).reshape((48,64))
+        print("Message received:")
+        print(state)
+        # print(img[:2,:3])
 
-    # message = socket.recv_json()
-    # state_list = message['state']
-    # print("Message received:")
-    # print(state_list)
+        # process an observation
+        state = tr.tensor(state).to(tr.float32)
+        if use_gpu: state = state.to(device)
+        pred = mu(state)
+        if use_gpu: pred = pred.to(cpu)
+        print(f"{pred=} >= {tau=}? {pred >= tau}")
 
-    # process an observation
-    obs = tr.randn(12)
-    pred = mu(obs)
-    print(f"{pred=} >= {tau=}? {pred >= tau}")
+        # send prediction back
+        alarm = (pred >= tau).squeeze().numpy().astype(bool)
+        socket.send_multipart([alarm.tobytes()], copy=False)
 
 

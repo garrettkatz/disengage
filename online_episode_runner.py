@@ -1,58 +1,121 @@
-import zmq
-import numpy as np
-# import json
-# import pybullet as p
-# import pybullet_data
-# import time
+if __name__ == "__main__":
 
-# 1. Setup ZeroMQ Client
-context = zmq.Context()
-socket = context.socket(zmq.REQ)
-# Connect to Jetson Nano's USB-C IP
-jetson_ip = "192.168.55.1" 
-socket.connect(f"tcp://{jetson_ip}:5555")
+    import pickle as pk
+    import zmq
+    import numpy as np
+    import torch as tr
+    import time
+    import ruins_utils as ru
 
-# Send state to Jetson
-state = np.random.rand(12)
-img = np.random.randint(255, size=(48,64), dtype=np.uint8)
-print(state)
-print(img[:2,:3])
-# socket.send(state, copy=False)
-socket.send_multipart([state.tobytes(), img.tobytes()], copy=False)
+    do_test = True
+    do_show = True
+    render = False
 
-# # 2. Setup PyBullet Environment
-# physicsClient = p.connect(p.GUI)
-# p.setAdditionalSearchPath(pybullet_data.getDataPath())
-# p.setGravity(0, 0, -9.8)
-# planeId = p.loadURDF("plane.urdf")
-# # Example object: Replace with your actual robot/agent URDF
-# robotId = p.loadURDF("r2d2.urdf", [0, 0, 1])
-
-# print("Starting simulation loop...")
-
-# # 3. Episode Loop
-# for episode in range(10):
-#     # Reset or initialize your environment state here
-#     print(f"Starting Episode {episode}")
+    if do_test:
     
-#     for step in range(1000):
-#         # Gather your state observation (Example: 8 mock floating point values)
-#         # In reality, extract this using p.getBasePositionAndOrientation(robotId), etc.
-#         state_observation = [0.1, -0.2, 0.5, 1.2, -0.4, 0.0, 0.8, -0.1]
+        # set up ruins environment and policy
+        env, ppo_policy = ru.load("41652_ppo_drone", render)
         
-        # # Send state to Jetson
-        # socket.send_json({'state': state_observation})
-        
-#         # Wait for action reply (blocks until Jetson responds)
-#         reply = socket.recv_json()
-#         action = reply['action']
-        
-#         # Apply the action to your PyBullet agent
-#         # Example: p.setJointMotorControlArray(robotId, ...)
-        
-#         # Step the simulator physics forward
-#         p.stepSimulation()
-#         time.sleep(1./240.) 
+        # set up ZeroMQ client for jetson communication
+        context = zmq.Context()
+        socket = context.socket(zmq.REQ)
+        # Connect to Jetson Nano's USB-C IP
+        jetson_ip = "192.168.55.1" 
+        socket.connect(f"tcp://{jetson_ip}:5555")
+    
+        # start an episode 
+        obs, info = env.reset()
+        observations = [obs]
+        actions = []
+        rewards = []
+        alarms = []
+        watchdog_times = []
+        failed = False
+    
+        start = time.time()
+        max_steps = env.EPISODE_LEN_SEC*env.CTRL_FREQ
+        for i in range(1, max_steps):
+    
+            start_jetson = time.perf_counter()
+    
+            # Send state to Jetson
+            state = obs
+            # img = np.random.randint(255, size=(48,64), dtype=np.uint8)
+            # socket.send_multipart([state.tobytes(), img.tobytes()], copy=False)
+            img = np.random.randint(255, size=(48,64), dtype=np.uint8)
+            socket.send_multipart([state.tobytes()], copy=False)
+    
+            # receive result
+            frames = socket.recv_multipart(copy=False)
+            alarm = np.frombuffer(frames[0], dtype=bool)
+    
+            jetson_time = time.perf_counter() - start_jetson
+    
+            alarms.append(alarm)
+            watchdog_times.append(jetson_time)
+    
+            with tr.no_grad():
+                action = ppo_policy.select_action(obs)
+    
+            action = np.expand_dims(action, axis=0)
+            obs, reward, terminated, truncated, info = env.step(action)
+            failed = env.failure_predicate() or (truncated and not terminated)
+            rewards.append(reward)
+    
+            # # perturb after checking failure
+            # if perturb_obs is not None: obs = perturb_obs(obs)
+    
+            observations.append(obs)
+            actions.append(action)
+    
+            print(f"timestep {i} of {max_steps}: {jetson_time=:.3f}, reward = {sum(rewards):.3f}, {terminated=}, {truncated=}, {failed=}")
+            if render:
+                env.render()
+                ru.sync(i, start, env.CTRL_TIMESTEP)
+    
+            if failed:
+                # print("Failed!")
+                break
+    
+            if terminated or truncated:
+                # if truncated: print("Trunk!")
+                break
+    
+        # clear buffer
+        ppo_policy.buffer.clear()
+    
+        # timing results
+        watchdog_times = np.array(watchdog_times)
+        control_period = 1. / env.CTRL_FREQ
+        print(f"watchdog times = {watchdog_times.mean()} +/- {watchdog_times.std()} <= {watchdog_times.max()}")
+        print(f"control period = {control_period}")
+        with open("oer.pkl","wb") as f:
+            pk.dump((watchdog_times, control_period), f)
 
-# p.disconnect()
+    if do_show:
+
+        with open("oer.pkl","rb") as f:
+            (watchdog_times, control_period) = pk.load(f)
+
+        import matplotlib.pyplot as pt
+
+        pt.figure(figsize=(6,5))
+        pt.hist(watchdog_times)
+        pt.plot([control_period, control_period], [0,100], 'r--', label="Simulation Control Period")
+        pt.legend()
+
+        ax_sec = pt.gca()
+        ax_sec.set_xlabel("Per-timestep preemption processing time (Seconds)")
+        ax_sec.set_ylabel(f"Count (out of {len(watchdog_times)} time-steps total)")
+
+        ax_freq = ax_sec.twiny()
+        ax_freq.set_xlim(ax_sec.get_xlim())
+        ax_freq.set_xbound(ax_sec.get_xbound())
+        ax_freq.set_xlabel('Per-timestep preemption processing frequency (Hz)')
+        ax_freq.xaxis.set_major_formatter(pt.FuncFormatter(lambda x, pos: f"{1./x:.2f}" if x > 0 else ""))
+
+        pt.title("Jetson Timing Histogram")
+        pt.tight_layout()
+        pt.savefig("oer.pdf")
+        pt.show()
 
