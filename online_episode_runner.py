@@ -7,7 +7,7 @@ if __name__ == "__main__":
     import time
     import ruins_utils as ru
 
-    do_test = True
+    do_test = False
     do_show = True
     render = False
 
@@ -97,24 +97,30 @@ if __name__ == "__main__":
         with open("oer.pkl","rb") as f:
             (watchdog_times, control_period) = pk.load(f)
 
+        import matplotlib as mpl
         import matplotlib.pyplot as pt
+        mpl.rcParams['font.family'] = 'serif'
 
-        pt.figure(figsize=(6,5))
+        # pt.figure(figsize=(6,5))
+        pt.figure(figsize=(3,2))
         pt.hist(watchdog_times)
-        pt.plot([control_period, control_period], [0,100], 'r--', label="Simulation Control Period")
+        # pt.plot([control_period, control_period], [0,100], 'r--', label="Simulation Control Period")
+        pt.plot([control_period, control_period], [0,100], 'r--', label="Control Period")
         pt.legend()
 
         ax_sec = pt.gca()
-        ax_sec.set_xlabel("Per-timestep preemption processing time (Seconds)")
-        ax_sec.set_ylabel(f"Count (out of {len(watchdog_times)} time-steps total)")
+        # ax_sec.set_xlabel("Per-timestep preemption processing time (Seconds)")
+        ax_sec.set_xlabel("Processing time (Seconds)")
+        # ax_sec.set_ylabel(f"Count (out of {len(watchdog_times)} time-steps total)")
+        ax_sec.set_ylabel(f"Count")
 
-        ax_freq = ax_sec.twiny()
-        ax_freq.set_xlim(ax_sec.get_xlim())
-        ax_freq.set_xbound(ax_sec.get_xbound())
-        ax_freq.set_xlabel('Per-timestep preemption processing frequency (Hz)')
-        ax_freq.xaxis.set_major_formatter(pt.FuncFormatter(lambda x, pos: f"{1./x:.2f}" if x > 0 else ""))
+        # ax_freq = ax_sec.twiny()
+        # ax_freq.set_xlim(ax_sec.get_xlim())
+        # ax_freq.set_xbound(ax_sec.get_xbound())
+        # ax_freq.set_xlabel('Per-timestep preemption processing frequency (Hz)')
+        # ax_freq.xaxis.set_major_formatter(pt.FuncFormatter(lambda x, pos: f"{1./x:.2f}" if x > 0 else ""))
 
-        pt.title("Jetson Timing Histogram")
+        # pt.title("Jetson Timing Histogram")
         pt.tight_layout()
         pt.savefig("oer.pdf")
         pt.show()
