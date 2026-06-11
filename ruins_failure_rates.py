@@ -12,7 +12,7 @@ if __name__ == "__main__":
     do_show = True
     base = "ru"
 
-    num_rollouts = 1000
+    num_rollouts = 10
     # obs_noises = [.05, .1, .15]
     # obs_noises = [.05, .4, .6]
     obs_noises = [.05, .25, .5]
