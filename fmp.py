@@ -39,7 +39,7 @@ def sample_fmp(S, T, L, min_failrate=0):
         for p, path in enumerate(paths):
             for t in range(1,T):
                 path_probs[p,t] = path_probs[p,t-1] * P[path[t-1], path[t]]
-    
+
         # failure paths
         fails = (paths == (S-1)).any(axis=1)
 
