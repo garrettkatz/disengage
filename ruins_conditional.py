@@ -50,33 +50,33 @@ if __name__ == "__main__":
             "basename": "ru_data/ru_cond",
             "buf_rep": rep,
             "train_rep": rep,
-    
+
             "obs_noise": .05,
             "max_episode_length": 240,
             "total_timesteps": 200_000,
-    
+
             "max_leadtime": 12,
             "num_updates": 10_400,
             "train_batch_size": 781,
             "valid_batch_size": 20_000,
-    
+
             "learning_rate": 5e-3,
             "weight_decay": .2,
             "train_fraction": .8, # fraction of rollouts used for training
-    
+
             "report_period": None,
             "checkpoint_period": 100,
             "bucket_size": 10, # buckets for learning curve trendlines
         }
-    
+
         if do_sampling:
             run_episode = EpisodeRunner(params["obs_noise"])
             tm.collect_data(params, run_episode, report_period=100)
             run_episode.close() # disconnects phyics server
-    
+
         if do_training:
             tm.train(params, setup_mu)
-    
+
         if do_show:
             tm.show_results(params, setup_mu, [1, 2, 3, 6, 12])
-    
+

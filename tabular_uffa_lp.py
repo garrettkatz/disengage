@@ -79,28 +79,10 @@ def brute(p0, P, f, T):
 
     return best_flarm_rate, best_ufail_rate, best_mask
 
-
-if __name__ == "__main__":
-
-    S = 3
-    L = 1
-    T = 1
-
-    p0, P, f = sample_mp(S,L)
-    print(p0)
-    print(P)
-    print(f)
-
-    f0 = p0[f].sum()
-    print(f"initial state failrate = {f0}")
-
-    # delta = 0.5*f0 + .5
-    # print(f"setting {delta=} (halfway between {f0} and 1)")
-    delta = 0.9*f0 + .1
-    print(f"setting {delta=} (slightly bigger than {f0})")
-
-    # form lifted probs
-    print('lifted:')
+def lift_mp(p0, P, f):
+    # _p_ is initial dist of augmented state
+    # _P_q is transitions when quiet
+    # _P_w is transitions when warns
     _p_ = np.concatenate([p0[~f], np.zeros(2*(~f).sum()), p0[f], np.zeros(S)])
     P_ss, P_sf = P[~f][:,~f], P[~f][:,f]
     P_fs, P_ff = P[f][:,~f], P[f][:,f]
@@ -122,36 +104,33 @@ if __name__ == "__main__":
         [Z_ss, Z_ss, Z_ss, Z_sf, P_ss, P_sf],
         [Z_fs, Z_fs, Z_fs, Z_ff, P_fs, P_ff],
     ])
-    print(_p_)
-    print(_P_q)
-    print(_P_w)
 
-    # knapsack for 1-step problem
+    return _p_, _P_q, _P_w
+
+def solve_lp(delta, f, S, T, _p_, _P_q, _P_w):
+
     occupancy_measures = [
         cp.Variable(shape=(len(_p_),2), nonneg=True)
         for _ in range(T+1)]
     objective = cp.Minimize(occupancy_measures[T][(~f).sum():2*(~f).sum(),:].sum()) # false alarm
     constraints = [
+        occupancy_measures[T][2*(~f).sum():2*(~f).sum()+S,:].sum() <= delta, # unpreempted failure
         occupancy_measures[0].sum(axis=1) == _p_,
-        # occupancy_measures[1].sum(axis=1) == (occupancy_measures[0][:,0] @ _P_q) + (occupancy_measures[0][:,1] @ _P_w),
-        occupancy_measures[T][2*(~f).sum():2*(~f).sum()+S,:].sum() <= delta,
     ]
     for t in range(T):
         constraints.append(
+            # [0] is _quiet and [1] is _warn
             occupancy_measures[t+1].sum(axis=1) == (occupancy_measures[t][:,0] @ _P_q) + (occupancy_measures[t][:,1] @ _P_w),
         )
     prob = cp.Problem(objective, constraints)
     prob.solve()
+
     policy = {}
+    nn = (~f).sum()
+    nf = f.sum()
     for t in range(T+1):
-        print(f'occ[{t}] (sum)')
         omt = occupancy_measures[t].value
-        nn = (~f).sum()
-        nf = f.sum()
-        print(omt.round(3).T)
-        print(omt.sum())
-        print(f'effective alarm policy:')
-        policy[t] = np.zeros((S,2))
+        policy[t] = np.zeros((S,2)) # prob([quiet, warns] | state)
         policy[t][~f] += omt[0*nn:1*nn]
         policy[t][~f] += omt[1*nn:2*nn]
         policy[t][~f] += omt[2*nn:3*nn]
@@ -159,11 +138,52 @@ if __name__ == "__main__":
         policy[t][f] += omt[3*nn:3*nn+nf]
         policy[t][f] += omt[4*nn+nf:]
         policy[t] /= policy[t].sum(axis=1,keepdims=True)
+
+    return prob, occupancy_measures, policy
+
+
+if __name__ == "__main__":
+
+    S = 3
+    L = 1
+    T = 2
+
+    p0, P, f = sample_mp(S,L)
+    print(p0)
+    print(P)
+    print(f)
+
+    f0 = p0[f].sum()
+    print(f"initial state failrate = {f0}")
+
+    # delta = 0.5*f0 + .5
+    # print(f"setting {delta=} (halfway between {f0} and 1)")
+    delta = 0.9*f0 + .1
+    print(f"setting {delta=} (slightly bigger than {f0})")
+
+    # form lifted probs
+    _p_, _P_q, _P_w = lift_mp(p0, P, f)
+    print('lifted:')
+    print(_p_)
+    print(_P_q)
+    print(_P_w)
+
+    prob, occupancy_measures, policy = solve_lp(delta, f, S, T, _p_, _P_q, _P_w)
+
+    for t in range(T+1):
+        omt = occupancy_measures[t].value
+        print(f'occ[{t}] (sum)')
+        print(omt.round(3).T)
+        print(omt.sum())
+        print(f'effective alarm policy:')
         print(policy[t].round(3).T)
     print(f'FA rate')
     print(occupancy_measures[T].value[(~f).sum():2*(~f).sum(),:].sum())
     print(f'UF rate, <=? {delta=}')
     print(occupancy_measures[T].value[2*(~f).sum():2*(~f).sum()+S,:].sum())
+    print("UF dual value:", prob.constraints[0].dual_value)
+
+    # input("...")
 
     best_flarm_rate, best_ufail_rate, best_mask = brute(p0, P, f, T)
     print(f"brute {best_flarm_rate=}, {best_ufail_rate=}, mask:")
@@ -188,4 +208,22 @@ if __name__ == "__main__":
         if alarm and not fail: fas += 1
 
     print(f"empirical uf rate = {ufs/num_reps}, fa rate = {fas/num_reps}")
+
+    # delta_t's
+    # delta_t = Pr(UF and first fail at t)
+    # e_t[i] = Pr(S_t = i, no alarms <t, no failures <=t)
+    # delta_t = (e_t * q) @ P @ f
+    e = {0: p0 * (1-f)}
+    deltas = {0: f0}
+    print(p0)
+    print(f)
+    Nf = np.diag(1-f)
+    for t in range(T):
+        print(f"e[{t}]=", e[t].round(3))
+        Q = policy[t][:,0]
+        e[t+1] = (e[t] * Q) @ P @ Nf
+        deltas[t+1] = ((e[t] * Q) @ P @ f[:,None])[0]
+        print(f"d_t=", deltas[t+1])
+    print(f"delta: {delta} =? {sum(deltas.values())}")
+    print(e[T].round(3))
 

@@ -35,7 +35,7 @@ if __name__ == "__main__":
         "num_updates": 10_400,
         "learning_rate": 5e-3,
         "weight_decay": .2,
-    
+
         "calib_padding": 0, # this many outliers below tau
         "num_repetitions": 100, # this many repetitions to estimate preemption rates
 

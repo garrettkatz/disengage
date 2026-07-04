@@ -112,7 +112,7 @@ def train(params, setup_mu):
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-    
+
             # track metrics
             loss_curve[L]["train"].append(loss.item())
 
@@ -131,14 +131,14 @@ def train(params, setup_mu):
 
                     # sample a validation batch
                     current_obs, next_obs, next_fail = sample_batch(valid_rollouts, valid_failures, max_episode_length, valid_batch_size)
-    
+
                     # setup targets
                     targets = next_fail if L==1 else mu[L-1](next_obs).squeeze()
-    
+
                     # calculate loss
                     predictions = mu[L](current_obs).squeeze()
                     loss = mse(predictions, targets)
-    
+
                     # track metrics
                     loss_curve[L]["valid"].append(loss.item())
 
@@ -182,7 +182,7 @@ def show_results(params, setup_mu, Ls):
     # load buffer and mus
     (rollouts, failures, failrate) = tr.load(buffer_name, weights_only=True)
     (_, loss_curve, early_stops, mu_state_dicts) = tr.load(f"{train_basename}_trained.pt", weights_only=True)
-    mu = {} 
+    mu = {}
     print(f"{failrate=:.3f}")
     print("early stops, valid losses:")
     for L in range(1, max_leadtime+1):
@@ -209,7 +209,7 @@ def show_results(params, setup_mu, Ls):
 
         # loss trendline
         buckets = np.array(loss_curve[L]["train"]).reshape(-1, bucket_size).mean(axis=1)
-    
+
         pt.subplot(2, len(Ls), i+1)
         pt.plot(loss_curve[L]["train"], '-', color=(.8,)*3)
         pt.plot(np.arange(len(buckets))*bucket_size + bucket_size/2, buckets, 'k:', label="train")

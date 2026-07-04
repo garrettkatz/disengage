@@ -180,6 +180,28 @@ def indicator_mu(fmp, L, delta):
     ufail_rate, flarm_rate = conform(fmp, L, delta, mu)
     return flarm_rate, ufail_rate, mu
 
+def knapsack_mu(fmp, L, delta):
+    # mu(s) = exp{- Pr(no future fail >= t+1 | s_t) /  Pr(fail next t+1 | s_t) }
+    P, paths, path_probs, fails, end_times, failrate = fmp
+
+    S = len(P)
+    # f = np.zeros(S)
+    # f[-1] = 1
+    # denom = P @ f
+    # numer = np.linalg.matrix_power(P * np.diag(1-f), L-1) @ P @ (1-f)
+    # mu = np.where(denom == 0, 0, np.exp(-numer / denom))
+
+    numer = np.zeros(S)
+    denom = np.zeros(S)
+    for s in range(S):
+        for path, prob, fail, end in zip(paths, path_probs, fails, end_times):
+            if fail and path[end-1] == s: denom[s] += prob[-1]
+            if not fail and s in path: numer[s] += prob[-1]
+    mu = np.where(denom == 0, 0, np.exp(-numer / denom))
+
+    ufail_rate, flarm_rate = conform(fmp, L, delta, mu)
+    return flarm_rate, ufail_rate, mu
+
 def theoretical_lower_bound(fmp, L, delta):
     P, paths, path_probs, fails, end_times, failrate = fmp
 
@@ -219,30 +241,32 @@ def main():
     delta_ratio = .5
     guesses = 50#0
     num_reps = 30
-    do_reps = False
+    do_reps = True
 
     if do_reps:
 
         failrate = np.empty(num_reps)
         fa_rate = {
-            "random once": np.empty(num_reps),
-            "random many": np.empty(num_reps),
+            # "random once": np.empty(num_reps),
+            # "random many": np.empty(num_reps),
             "conditional": np.empty(num_reps),
+            "knapsack": np.empty(num_reps),
             "theoretical": np.empty(num_reps),
             # "indicator": np.empty(num_reps),
             # "joint": np.empty(num_reps),
         }
         uf_rate = {
-            "random once": np.empty(num_reps),
-            "random many": np.empty(num_reps),
+            # "random once": np.empty(num_reps),
+            # "random many": np.empty(num_reps),
             "conditional": np.empty(num_reps),
+            "knapsack": np.empty(num_reps),
             "theoretical": np.empty(num_reps),
             # "indicator": np.empty(num_reps),
             # "joint": np.empty(num_reps),
         }
         for rep in range(num_reps):
             print(rep)
-    
+
             P, paths, path_probs, fails, end_times, failrate[rep] = fmp = sample_fmp(S, T, L, min_failrate)
             print(P)
             print(f"min end time = {end_times.min()}")
@@ -250,31 +274,36 @@ def main():
             delta = failrate[rep] * delta_ratio
             print(f"fail rate = {failrate[rep]}")
             print(f"{delta=}")
-        
+
             # print("\nnear state:")
             # flarm_rate, ufail_rate, mu = near_state_mu(fmp, L, delta)
             # print(f"{flarm_rate=}")
             # print(f"{ufail_rate=}")
-        
+
             # print("\nconstant:")
             # flarm_rate, ufail_rate, mu = constant_mu(fmp, L, delta)
             # print(f"{flarm_rate=}")
             # print(f"{ufail_rate=}")
 
-            print("\nrandom once:")
-            fa_rate["random once"][rep], uf_rate["random once"][rep], mu = random_search_mu(fmp, L, delta, 1, verbose=False)
-            print(f"uw: {fa_rate['random once'][rep]}")
-            print(f"uf: {uf_rate['random once'][rep]}")
+            # print("\nrandom once:")
+            # fa_rate["random once"][rep], uf_rate["random once"][rep], mu = random_search_mu(fmp, L, delta, 1, verbose=False)
+            # print(f"uw: {fa_rate['random once'][rep]}")
+            # print(f"uf: {uf_rate['random once'][rep]}")
 
-            print("\nrandom many:")
-            fa_rate["random many"][rep], uf_rate["random many"][rep], mu = random_search_mu(fmp, L, delta, guesses, verbose=False)
-            print(f"uw: {fa_rate['random many'][rep]}")
-            print(f"uf: {uf_rate['random many'][rep]}")
-        
+            # print("\nrandom many:")
+            # fa_rate["random many"][rep], uf_rate["random many"][rep], mu = random_search_mu(fmp, L, delta, guesses, verbose=False)
+            # print(f"uw: {fa_rate['random many'][rep]}")
+            # print(f"uf: {uf_rate['random many'][rep]}")
+
             print("\nconditional:")
             fa_rate["conditional"][rep], uf_rate["conditional"][rep], mu = conditional_mu(fmp, L, delta)
             print(f"uw: {fa_rate['conditional'][rep]}")
             print(f"uf: {uf_rate['conditional'][rep]}")
+
+            print("\nknapsack:")
+            fa_rate["knapsack"][rep], uf_rate["knapsack"][rep], mu = knapsack_mu(fmp, L, delta)
+            print(f"uw: {fa_rate['knapsack'][rep]}")
+            print(f"uf: {uf_rate['knapsack'][rep]}")
 
             print("\ntheoretical:")
             fa_rate["theoretical"][rep], uf_rate["theoretical"][rep], _ = theoretical_lower_bound(fmp, L, delta)
@@ -299,25 +328,29 @@ def main():
 
     # labels = ["conditional", "joint", "random once", "random many"]
     # labels = ["conditional", "indicator", "random once", "random many"]
-    labels = ["conditional", "theoretical", "random once", "random many"]
+    # labels = ["conditional", "theoretical", "random once", "random many"]
+    labels = ["conditional", "knapsack", "theoretical"]
 
     best_rate = np.stack([fa_rate[label] for label in labels]).min(axis=0)
     print("Win rates")
     for label in labels:
         print(label, (fa_rate[label] == best_rate).mean())
 
-    print(f"Conditional < random once {100*(fa_rate['conditional'] < fa_rate['random once']).mean()}% of the time")
+    # print(f"Conditional < random once {100*(fa_rate['conditional'] < fa_rate['random once']).mean()}% of the time")
 
     cond_ratio = (fa_rate["conditional"] / fa_rate["theoretical"])
-    rand_ratio = (fa_rate["random once"] / fa_rate["theoretical"])
+    # rand_ratio = (fa_rate["random once"] / fa_rate["theoretical"])
+    knap_ratio = (fa_rate["knapsack"] / fa_rate["theoretical"])
     print(f"conditional/theoretical ~ {cond_ratio.mean()} +/- {cond_ratio.std()}")
-    print(f"random once/theoretical ~ {rand_ratio.mean()} +/- {rand_ratio.std()}")
+    # print(f"random once/theoretical ~ {rand_ratio.mean()} +/- {rand_ratio.std()}")
+    print(f"knapsack/theoretical ~ {knap_ratio.mean()} +/- {knap_ratio.std()}")
 
     pt.figure(figsize=(6,3))
     pt.subplot(1,2,1)
     # idx = np.argsort(best_rate)
     idx = np.argsort(fa_rate["theoretical"])
     pt.plot(fa_rate["conditional"][idx], 'o', mfc='none', mec='b', label="Conditional")
+    pt.plot(fa_rate["knapsack"][idx], 's', mfc='none', mec='m', label="Knapsack")
     # pt.plot(fa_rate["joint"][idx], 's', mfc='none', mec='m', label="joint")
     # pt.plot(fa_rate["indicator"][idx], 's', mfc='none', mec='m', label="indicator")
     pt.plot(fa_rate["theoretical"][idx], 'k:', label="Theoretical")
