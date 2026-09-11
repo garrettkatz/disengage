@@ -65,6 +65,7 @@ def load(checkpoint_name, render=False):
 
 # @profile
 def run(env, ppo_agent, perturb_obs=None, render=False):
+    # if failure, last state in rollout is failure state
 
     # obs, info = env.reset(seed=42, options={})
     obs, info = env.reset()

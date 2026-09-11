@@ -4,18 +4,20 @@ import numpy as np
 import matplotlib.pyplot as pt
 import torch as tr
 
-def sample_batch(rollouts, failures, max_episode_length, batch_size, lead_time):
-    current_obs, next_obs, near_fail = [], [], []
+def sample_batch(rollouts, failures, max_episode_length, batch_size):
+    current_obs, next_obs, fail_indicator, timesteps_remaining = [], [], [], []
     for r in np.random.randint(len(rollouts), size=batch_size):
         t = np.random.randint(max_episode_length-1)
-        current_obs.append( rollouts[r][min(t, len(rollouts[r])-2)] )
-        next_obs.append( rollouts[r][min(t+1, len(rollouts[r])-1)] )
-        # indicator whether a failure happened within lead time
-        near_fail.append( (failures[r] and t + lead_time >= len(rollouts[r])) )
+        t = min(t, len(rollouts[r])-2) # so that t+1 will be failure, if any
+        current_obs.append(rollouts[r][t])
+        next_obs.append(rollouts[r][t+1])
+        fail_indicator.append(failures[r])
+        timesteps_remaining.append((len(rollouts[r])-1) - t)
     current_obs = tr.stack(current_obs)
     next_obs = tr.stack(next_obs)
-    near_fail = tr.tensor(near_fail).to(tr.float32)
-    return current_obs, next_obs, near_fail
+    fail_indicator = tr.tensor(fail_indicator).to(tr.bool)
+    timesteps_remaining = tr.tensor(timesteps_remaining)
+    return current_obs, next_obs, fail_indicator, timesteps_remaining
 
 def train(params, setup_mu):
 
@@ -54,8 +56,9 @@ def train(params, setup_mu):
     bce = tr.nn.BCEWithLogitsLoss() # minimized at max likelihood estimate of bernoulli
 
     # do training
+    Ls = [-1, 5]
     # for L in range(1, max_leadtime + 1):
-    for L in [5]:
+    for L in Ls:
 
         mu[L] = setup_mu()
         loss_curve[L] = {"train": [], "valid": []}
@@ -65,12 +68,13 @@ def train(params, setup_mu):
         for update in range(1, num_updates+1):
 
             # sample a training batch
-            current_obs, next_obs, near_fail = sample_batch(train_rollouts, train_failures, max_episode_length, train_batch_size, L)
+            current_obs, next_obs, fail_indicator, timesteps_remaining = sample_batch(train_rollouts, train_failures, max_episode_length, train_batch_size)
 
             # setup targets
-            targets = near_fail
-            # with tr.no_grad():
-            #     targets = next_fail if L==1 else mu[L-1](next_obs).squeeze()
+            if L == -1: # Pr(no failure until end of episode | current_obs)
+                targets = 1. - fail_indicator.to(tr.float32)
+            else: # Pr(no failure sooner than L timesteps ahead | current_obs)
+                targets = 1. - (fail_indicator & (timesteps_remaining < L)).to(tr.float32)
 
             # calculate loss
             predictions = mu[L](current_obs).squeeze()
@@ -98,11 +102,13 @@ def train(params, setup_mu):
                 with tr.no_grad():
 
                     # sample a validation batch
-                    current_obs, next_obs, near_fail = sample_batch(valid_rollouts, valid_failures, max_episode_length, valid_batch_size, L)
+                    current_obs, next_obs, fail_indicator, timesteps_remaining = sample_batch(valid_rollouts, valid_failures, max_episode_length, valid_batch_size)
 
                     # setup targets
-                    targets = near_fail
-                    # targets = next_fail if L==1 else mu[L-1](next_obs).squeeze()
+                    if L == -1: # Pr(no failure until end of episode | current_obs)
+                        targets = 1. - fail_indicator.to(tr.float32)
+                    else: # Pr(no failure sooner than L timesteps ahead | current_obs)
+                        targets = 1. - (fail_indicator & (timesteps_remaining < L)).to(tr.float32)
 
                     # calculate loss
                     predictions = mu[L](current_obs).squeeze()
@@ -125,7 +131,7 @@ def train(params, setup_mu):
         print(f"{L=}: reloaded checkpoint {early_stops[L]} with valid loss {best_valid_loss}")
 
     # tr.save((failrate, loss_curve, early_stops, {L: mu[L].state_dict() for L in range(1, max_leadtime+1)}), f"{train_basename}_trained.pt")
-    tr.save((failrate, loss_curve, early_stops, {L: mu[L].state_dict() for L in [5]}), f"{train_basename}_trained.pt")
+    tr.save((failrate, loss_curve, early_stops, {L: mu[L].state_dict() for L in Ls}), f"{train_basename}_trained.pt")
 
 def show_results(params, setup_mu, Ls):
 
@@ -176,6 +182,7 @@ def show_results(params, setup_mu, Ls):
     pt.figure(figsize=(15,3))
 
     # for L in range(1, max_leadtime + 1):
+    scatter_xy = []
     for i, L in enumerate(Ls):
 
         # loss trendline
@@ -194,12 +201,17 @@ def show_results(params, setup_mu, Ls):
 
         # predict on a validation batch for visualization
         with tr.no_grad():
-            current_obs, next_obs, near_fail = sample_batch(valid_rollouts, valid_failures, max_episode_length, valid_batch_size, L)
+            current_obs, next_obs, fail_indicator, timesteps_remaining = sample_batch(valid_rollouts, valid_failures, max_episode_length, valid_batch_size)
             predictions = mu[L](current_obs).squeeze()
-            targets = near_fail #next_fail if L==1 else mu[L-1](next_obs).squeeze()
+            # setup targets
+            if L == -1: # Pr(no failure until end of episode | current_obs)
+                targets = 1. - fail_indicator.to(tr.float32)
+            else: # Pr(no failure sooner than L timesteps ahead | current_obs)
+                targets = 1. - (fail_indicator & (timesteps_remaining < L)).to(tr.float32)
 
         # not training on logits anymore, so pass through softmax for visualization
         predictions = tr.sigmoid(predictions)
+        scatter_xy.append(predictions)
 
         pt.subplot(2, len(Ls), len(Ls) + i + 1)
         pt.plot(predictions, targets, 'k.', alpha=.5)
@@ -208,6 +220,12 @@ def show_results(params, setup_mu, Ls):
         pt.ylabel("Target")
 
     pt.tight_layout()
+    pt.show()
+
+    # compare predictions for different L
+    pt.plot(scatter_xy[0], scatter_xy[1], 'k.')
+    pt.xlabel(Ls[0])
+    pt.ylabel(Ls[1])
     pt.show()
 
 
