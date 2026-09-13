@@ -27,7 +27,8 @@ class EpisodeRunner:
         self.perturb_obs = tm.perturb_obs_factory(obs_noise)
 
     def __call__(self):
-        return ru.run(self.env, self.model, self.perturb_obs, render=False)
+        failure, ep_rew, ep_len, (observations, dep_imgs), actions = ru.run(self.env, self.model, self.perturb_obs, render=False)
+        return failure, ep_rew, ep_len, observations, actions
 
     def close(self):
         self.env.close()
@@ -42,7 +43,7 @@ if __name__ == "__main__":
     # update every four episodes, so (41652 / 4 = 10413) updates, batch size <= 4 episodes * 240 max episode length
     # effective average batch size is = 8_136_000 / 10413 = 781.3
 
-    for rep in range(3):
+    for rep in range(1,5):
         print(f"\n\n ******* {rep=} ********\n\n")
 
         params = {
@@ -73,5 +74,5 @@ if __name__ == "__main__":
             tm.train(params, setup_mu)
 
         if do_show:
-            tm.show_results(params, setup_mu, [-1, 5])
+            tm.show_results(params, setup_mu, [-1] + list(range(1,13)))
 

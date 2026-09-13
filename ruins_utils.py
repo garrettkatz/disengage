@@ -139,13 +139,13 @@ if __name__ == "__main__":
         observations, dep_imgs = observations
         print(f"{failure=:b} (dur={ep_len}={len(observations)})")
         input('.')
-        
+
         pt.figure(figsize=(4,4))
         pt.ion()
         pt.show()
 
         print(f"depth shape = {dep_imgs[0].shape}")
-        
+
         for t, deps in enumerate(dep_imgs):
             for d, dep in enumerate(deps): # one channel per drone
                 pt.subplot(1,len(deps),d+1)

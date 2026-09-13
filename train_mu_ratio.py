@@ -4,6 +4,12 @@ import numpy as np
 import matplotlib.pyplot as pt
 import torch as tr
 
+# from train_mu_conditional import perturb_obs_factory
+def perturb_obs_factory(relative):
+    def perturb_obs(o):
+        return o * np.random.uniform(1 - relative, 1 + relative, size=o.shape)
+    return perturb_obs
+
 def sample_batch(rollouts, failures, max_episode_length, batch_size):
     current_obs, next_obs, fail_indicator, timesteps_remaining = [], [], [], []
     for r in np.random.randint(len(rollouts), size=batch_size):
@@ -56,7 +62,8 @@ def train(params, setup_mu):
     bce = tr.nn.BCEWithLogitsLoss() # minimized at max likelihood estimate of bernoulli
 
     # do training
-    Ls = [-1, 5]
+    # Ls = [-1, 5]
+    Ls = [-1] + [L for L in range(1, max_leadtime+1)]
     # for L in range(1, max_leadtime + 1):
     for L in Ls:
 
@@ -179,7 +186,7 @@ def show_results(params, setup_mu, Ls):
     train_rollouts, valid_rollouts = rollouts[:num_split], rollouts[num_split:]
     train_failures, valid_failures = failures[:num_split], failures[num_split:]
 
-    pt.figure(figsize=(15,3))
+    pt.figure(figsize=(25,3))
 
     # for L in range(1, max_leadtime + 1):
     scatter_xy = []
