@@ -1,5 +1,6 @@
 """
-Train mu(s,h) to predict Pr(no fail in [t+1, t+h] | S_t = s) for any non-fail state s
+Train mu(s) to predict Pr(no fail in [t+1, t+h] | S_t = s) for every h in [1,T] at any non-fail state s
+Uses monotonic architecture via sum over h-wise output head of nonpositive deltas
 """
 from time import perf_counter
 import matplotlib.pyplot as pt
@@ -24,15 +25,14 @@ def sample_batch(rollouts, failures, batch_size, max_episode_length):
 
         # grow the batch
         states.append(rollouts[r][t])
-        horizons.append(float(tph-t))
+        horizons.append(tph-t)
         nofails.append(float(nofail))
 
     # package batch and return
-    states = tr.stack(states)
-    horizons = tr.tensor(horizons) / max_episode_length # normalize to (0,1)
-    observations = tr.cat([states, horizons[:,None]], dim=-1)
+    observations = tr.stack(states)
+    horizons = tr.tensor(horizons)
     nofails = tr.tensor(nofails)
-    return observations, nofails
+    return observations, horizons, nofails
 
 
 def train(params, setup_mu):
@@ -75,10 +75,11 @@ def train(params, setup_mu):
     for update in range(1,num_updates+1):
 
         # sample a batch of s_t, h, non-failure indicator
-        observations, nofails = sample_batch(train_rollouts, train_failures, train_batch_size, max_episode_length)
+        observations, horizons, nofails = sample_batch(train_rollouts, train_failures, train_batch_size, max_episode_length)
 
         # backprop bce loss on indicator
-        predictions = mu(observations).squeeze()
+        all_logits = mu(observations)
+        predictions = tr.take_along_dim(all_logits, horizons[:,None]-1, dim=-1).squeeze()
         loss = bce(predictions, nofails)
 
         # gradient step
@@ -103,10 +104,11 @@ def train(params, setup_mu):
             with tr.no_grad():
 
                 # sample a validation batch
-                observations, nofails = sample_batch(valid_rollouts, valid_failures, valid_batch_size, max_episode_length)
+                observations, horizons, nofails = sample_batch(valid_rollouts, valid_failures, valid_batch_size, max_episode_length)
 
                 # calculate loss
-                predictions = mu(observations).squeeze()
+                all_logits = mu(observations)
+                predictions = tr.take_along_dim(all_logits, horizons[:,None]-1, dim=-1).squeeze()
                 loss = bce(predictions, nofails)
 
                 # track metrics
@@ -182,9 +184,10 @@ def show_results(params, setup_mu):
     pt.legend()
 
     # predict on a validation batch for visualization
-    observations, nofails = sample_batch(valid_rollouts, valid_failures, valid_batch_size, max_episode_length)
+    observations, horizons, nofails = sample_batch(valid_rollouts, valid_failures, valid_batch_size, max_episode_length)
     with tr.no_grad():
-        predictions = mu(observations).squeeze()
+        all_logits = mu(observations)
+        predictions = tr.take_along_dim(all_logits, horizons[:,None]-1, dim=-1).squeeze()
 
     # not training on logits anymore, so pass through softmax for visualization
     predictions = tr.sigmoid(predictions)
@@ -202,14 +205,14 @@ def show_results(params, setup_mu):
     pt.title("Output scatterplot")
 
     pt.subplot(1, 4, 3)
-    pt.plot(max_episode_length * observations[:,-1], (predictions - nofails).abs(), 'k.', alpha=.1)
+    pt.plot(horizons, (predictions - nofails).abs(), 'k.', alpha=.1)
     pt.xlabel("Horizon")
     pt.ylabel("|prediction-label|")
     pt.title("Horizon performance")
 
     pt.subplot(1, 4, 4)
     # pt.bar(np.arange(1, max_episode_length), [(h == np.round(max_episode_length * observations[:,-1])).sum() for h in range(1, max_episode_length)], align="edge")
-    pt.plot(np.arange(1, max_episode_length), [(h == np.round(max_episode_length * observations[:,-1])).sum() for h in range(1, max_episode_length)], 'k-')
+    pt.plot(np.arange(1, max_episode_length), [(h == horizons).sum() for h in range(1, max_episode_length)], 'k-')
     pt.xlabel("Horizon")
     pt.ylabel("Frequency")
     pt.title("Horizon distribution")
@@ -222,12 +225,10 @@ def show_results(params, setup_mu):
     pt.figure(figsize=(16,4))
     for n in range(num_obs):
         obs = observations[np.random.randint(len(observations))]
-        obs = obs.repeat(max_episode_length, 1)
-        obs[:,-1] = tr.arange(1, max_episode_length+1)
         with tr.no_grad():
-            predictions = mu(obs).squeeze()
-        pt.plot(obs[:,-1], predictions, '-')
-    pt.xlim([0,100])
+            predictions = mu(obs)
+        pt.plot(tr.arange(1,predictions.shape[-1]+1), predictions, '-')
+    # pt.xlim([0,100])
     pt.xlabel("Horizon")
     pt.ylabel("Probability logit")
     pt.title(f"Per-horizon predictions on {num_obs} random observations")
@@ -240,7 +241,7 @@ if __name__ == "__main__":
     for rep in range(5):
 
         params = {
-            "basename": "ru_data/ru_nt",
+            "basename": "ru_data/ru_mono",
             "buf_basename": "ru_data/ru_cond",
             "buf_rep": rep,
             "train_rep": rep,
@@ -249,53 +250,47 @@ if __name__ == "__main__":
             "max_episode_length": 240,
             "total_timesteps": 200_000,
 
-            "num_updates": 10_400,
+            "num_updates": 50_000, #10_400,
             "train_batch_size": 781,
             "valid_batch_size": 10000,
 
-            "learning_rate": 5e-4,#5e-3,
+            "learning_rate": 5e-5,#5e-3,
             "weight_decay": .1,
             "train_fraction": .8, # fraction of rollouts used for training
 
             "report_period": 10,#None,
-            "checkpoint_period": 100,
+            "checkpoint_period": 1000,
             "bucket_size": 10, # buckets for learning curve trendlines
         }
 
         def setup_mu():
-            # # MLP - same architecture as ruins critic
-            # num_hidden = 64
-            # return tr.nn.Sequential(
-            #     # tr.nn.Linear(in_features=12, out_features=num_hidden, bias=True),
-            #     tr.nn.Linear(in_features=13, out_features=num_hidden, bias=True), # +1 for scalar horizon
-            #     tr.nn.Tanh(),
-            #     tr.nn.Linear(in_features=num_hidden, out_features=num_hidden, bias=True),
-            #     tr.nn.Tanh(),
-            #     tr.nn.Linear(in_features=num_hidden, out_features=1, bias=True),
-            # )
 
             class Mu(tr.nn.Module):
+
                 def __init__(self):
                     super(Mu, self).__init__()
-                    # MLP - same architecture as ruins critic
+                    # MLP - same architecture as ruins critic except many output heads
                     num_hidden = 64
                     self.ff = tr.nn.Sequential(
                         tr.nn.Linear(in_features=12, out_features=num_hidden, bias=True),
                         tr.nn.Tanh(),
                         tr.nn.Linear(in_features=num_hidden, out_features=num_hidden, bias=True),
                         tr.nn.Tanh(),
-                        tr.nn.Linear(in_features=num_hidden, out_features=2, bias=True), # w,b linear transform of horizon
+                        tr.nn.Linear(in_features=num_hidden, out_features=params["max_episode_length"], bias=True),
                     )
                     self.sp = tr.nn.Softplus()
+
                 def forward(self, obs):
-                    wb = self.ff(obs[...,:-1])
-                    w, b = wb[...,:1], wb[...,1:]
-                    w = -self.sp(w) # monotonically decreasing
-                    h = obs[...,-1:]
-                    return w * h + b
+                    heads = self.ff(obs)
+                    ph0 = heads[...,:1]
+                    deltas = self.sp(heads[...,1:])
+                    logits = ph0 - deltas.cumsum(dim=-1) # monotonically decreasing
+                    return logits
+
             return Mu()
 
         train(params, setup_mu)
 
     show_results(params, setup_mu)
+
 

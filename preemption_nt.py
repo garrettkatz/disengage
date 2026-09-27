@@ -256,16 +256,38 @@ if __name__ == "__main__":
     from ruins_ratio import EpisodeRunner
 
     def setup_mu():
-        # MLP - same architecture as ruins critic
-        num_hidden = 64
-        return tr.nn.Sequential(
-            # tr.nn.Linear(in_features=12, out_features=num_hidden, bias=True),
-            tr.nn.Linear(in_features=13, out_features=num_hidden, bias=True), # +1 for scalar horizon
-            tr.nn.Tanh(),
-            tr.nn.Linear(in_features=num_hidden, out_features=num_hidden, bias=True),
-            tr.nn.Tanh(),
-            tr.nn.Linear(in_features=num_hidden, out_features=1, bias=True),
-        )
+        # # MLP - same architecture as ruins critic
+        # num_hidden = 64
+        # return tr.nn.Sequential(
+        #     # tr.nn.Linear(in_features=12, out_features=num_hidden, bias=True),
+        #     tr.nn.Linear(in_features=13, out_features=num_hidden, bias=True), # +1 for scalar horizon
+        #     tr.nn.Tanh(),
+        #     tr.nn.Linear(in_features=num_hidden, out_features=num_hidden, bias=True),
+        #     tr.nn.Tanh(),
+        #     tr.nn.Linear(in_features=num_hidden, out_features=1, bias=True),
+        # )
+
+        class Mu(tr.nn.Module):
+            def __init__(self):
+                super(Mu, self).__init__()
+                # MLP - same architecture as ruins critic
+                num_hidden = 64
+                self.ff = tr.nn.Sequential(
+                    tr.nn.Linear(in_features=12, out_features=num_hidden, bias=True),
+                    tr.nn.Tanh(),
+                    tr.nn.Linear(in_features=num_hidden, out_features=num_hidden, bias=True),
+                    tr.nn.Tanh(),
+                    tr.nn.Linear(in_features=num_hidden, out_features=2, bias=True), # w,b linear transform of horizon
+                )
+                self.sp = tr.nn.Softplus()
+            def forward(self, obs):
+                wb = self.ff(obs[...,:-1])
+                w, b = wb[...,:1], wb[...,1:]
+                w = -self.sp(w) # monotonically decreasing
+                h = obs[...,-1:]
+                return w * h + b
+        return Mu()
+
 
     # don't need gradients now
     tr.set_grad_enabled(False)
