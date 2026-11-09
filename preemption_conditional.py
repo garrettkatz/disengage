@@ -157,6 +157,10 @@ def show_results(params, obs_noises, delta_ratios, num_train_reps):
             with open(results_name, "rb") as f:
                 (failrate, delta_ratios, deltas, num_calibration, final_failure, final_duration, taus, alarm_times) = pk.load(f)
 
+            if rep == 0 and calib_obs_noise == final_obs_noise == 0.05:
+                print(f"{rep=}, taus:")
+                print(taus[0,1,0])
+
             # unpreempted if failed and first alarm came at or later than max(1, fail time - L)
             unpreempted[rep] = final_failure & (alarm_times >= np.maximum(1, final_duration - Ls))
 

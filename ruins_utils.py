@@ -64,11 +64,22 @@ def load(checkpoint_name, render=False):
     return env, ppo_agent
 
 # @profile
-def run(env, ppo_agent, perturb_obs=None, render=False):
+def run(env, ppo_agent, perturb_obs=None, render=False, preemptor=None):
     # if failure, last state in rollout is failure state
 
-    # obs, info = env.reset(seed=42, options={})
-    obs, info = env.reset()
+    obs, info = env.reset(seed=42, options={})
+    # obs, info = env.reset()
+
+    if preemptor is not None:
+        mu, tau = preemptor
+        scores = []
+        if render:
+            pt.ion()
+            pt.xlabel("Timestep")
+            pt.ylabel("Failure Score")
+            pt.plot([0, 240], [tau, tau], 'k:', label="Alarm threshold")
+            pt.ylim([0, .75])
+            input('>')
 
     if perturb_obs is not None: obs = perturb_obs(obs)
 
@@ -88,6 +99,11 @@ def run(env, ppo_agent, perturb_obs=None, render=False):
         with tr.no_grad():
             action = ppo_agent.select_action(obs)
 
+            if preemptor is not None:
+                obs_t = tr.tensor(obs, dtype=tr.float32)
+                score = tr.sigmoid(mu(obs_t)).squeeze()
+                scores.append(score)
+
         action = np.expand_dims(action, axis=0)
         obs, reward, terminated, truncated, info = env.step(action)
         failed = env.failure_predicate() or (truncated and not terminated)
@@ -104,6 +120,19 @@ def run(env, ppo_agent, perturb_obs=None, render=False):
             env.render()
             deps = env.depth_sense()
             dep_imgs.append(deps)
+
+            if preemptor is not None:
+                pt.cla()
+                pt.plot([0, 240], [tau, tau], 'k:', label="Alarm threshold")
+                color = 'b'
+                if any([s >= tau for s in scores]): color = 'r'
+                pt.plot(scores, color+'-')
+                pt.legend()
+                pt.xlabel("Timestep")
+                pt.ylabel("Failure Score")
+                pt.ylim([0, .75])
+                pt.pause(0.01)
+
             sync(i, start, env.CTRL_TIMESTEP)
 
         if failed:
