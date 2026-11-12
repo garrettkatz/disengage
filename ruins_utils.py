@@ -72,13 +72,16 @@ def run(env, ppo_agent, perturb_obs=None, render=False, preemptor=None):
 
     if preemptor is not None:
         mu, tau = preemptor
-        scores = []
+        scores = [np.nan]
+        stimes = [0]
         if render:
             pt.ion()
             pt.xlabel("Timestep")
             pt.ylabel("Failure Score")
             pt.plot([0, 240], [tau, tau], 'k:', label="Alarm threshold")
+            (scoreline,) = pt.plot(stimes, scores, color="b")
             pt.ylim([0, .75])
+            pt.legend(loc='upper left')
             input('>')
 
     if perturb_obs is not None: obs = perturb_obs(obs)
@@ -103,6 +106,7 @@ def run(env, ppo_agent, perturb_obs=None, render=False, preemptor=None):
                 obs_t = tr.tensor(obs, dtype=tr.float32)
                 score = tr.sigmoid(mu(obs_t)).squeeze()
                 scores.append(score)
+                stimes.append(i)
 
         action = np.expand_dims(action, axis=0)
         obs, reward, terminated, truncated, info = env.step(action)
@@ -122,15 +126,20 @@ def run(env, ppo_agent, perturb_obs=None, render=False, preemptor=None):
             dep_imgs.append(deps)
 
             if preemptor is not None:
-                pt.cla()
-                pt.plot([0, 240], [tau, tau], 'k:', label="Alarm threshold")
-                color = 'b'
-                if any([s >= tau for s in scores]): color = 'r'
-                pt.plot(scores, color+'-')
-                pt.legend()
-                pt.xlabel("Timestep")
-                pt.ylabel("Failure Score")
-                pt.ylim([0, .75])
+                # pt.cla()
+                # pt.plot([0, 240], [tau, tau], 'k:', label="Alarm threshold")
+                # color = 'b'
+                # if any([s >= tau for s in scores]): color = 'r'
+                # pt.plot(scores, color+'-')
+                # pt.legend()
+                # pt.xlabel("Timestep")
+                # pt.ylabel("Failure Score")
+                # pt.ylim([0, .75])
+                # pt.pause(0.01)
+                if scores[-1] >= tau: scoreline.set_color('r')
+                scoreline.set_data(stimes, scores)
+                pt.gca().draw_artist(scoreline)
+                pt.gcf().canvas.flush_events()
                 pt.pause(0.01)
 
             sync(i, start, env.CTRL_TIMESTEP)

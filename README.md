@@ -106,3 +106,15 @@ Run `[env]_preemption_conditional.py` to generate the data for the remaining fig
 
 After regenerating results for all environments, run `all_preemption.py` to create the summary Figure 8.
 
+### Demo video
+
+Install [Kooha](https://github.com/seadve/kooha)
+
+Run `ruins_demo.py`, which will open the environment and plot, display `>` on the command line and wait for you to press Enter.
+
+Before pressing Enter, arrange your windows, launch Kooha and select the screen area surrounding them:
+
+``$ flatpak run io.github.seadve.Kooha``
+
+Press Enter to run the environment while screen is recorded.
+

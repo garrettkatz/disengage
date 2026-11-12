@@ -46,7 +46,7 @@ class FlyThruRuinsAviary(BaseRLAviary):
     def set_camera(self):
         # good for hand-placed walls
         p.resetDebugVisualizerCamera(
-            cameraDistance=2.4,
+            cameraDistance=2.2,
             cameraYaw=-152,
             cameraPitch=-71,
             cameraTargetPosition=[-.2,-.77,.17])
